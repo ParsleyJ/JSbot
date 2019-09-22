@@ -37,7 +37,7 @@ class JSBot(
                             val bot = this
                             val scope = scopeGet(it, message.chatId, bot)!!
 
-                            doInTime(scope, text, message, 10)
+                            doInTime(scope, text, message, 3)
 
                         }
                     }
@@ -61,7 +61,7 @@ class JSBot(
         scope: Scriptable,
         text: String,
         message: Message,
-        timeout: Long
+        seconds: Long
     ) {
         val executor = Executors.newSingleThreadExecutor()
         println("Started Job...")
@@ -71,7 +71,7 @@ class JSBot(
                 Callable {
                     withContext { it2 ->
 
-                        if(text == "GETOUT"){
+                        if(text == "SEPPUKU"){
                             exitProcess(2)
                         }
 
@@ -101,7 +101,7 @@ class JSBot(
                         println("Ended Job.")
                     }
                 }),
-            timeout,
+            seconds,
             TimeUnit.SECONDS
         )
 
