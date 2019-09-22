@@ -73,6 +73,9 @@ class JSBot(
                         val send = SendMessage()
                             .setChatId(message.chatId)
                             .setText(Context.toString(result))
+                            .disableNotification()
+
+
                         try {
                             execute(send)
                         } catch (e: TelegramApiException) {
@@ -118,7 +121,11 @@ fun Scriptable.addStuff(bot: JSBot, chatID: Long?) {
             if (args.isNotEmpty()) {
                 var text = Context.toString(args[0])
                 text = if (text === null || text.isEmpty()) "_" else text
-                bot.execute(SendMessage().setChatId(chatID).setText(text))
+                bot.execute(SendMessage()
+                    .setChatId(chatID)
+                    .setText(text)
+                    .disableNotification()
+                )
             }
             return Undefined.instance
         }
@@ -136,7 +143,7 @@ fun Scriptable.addStuff(bot: JSBot, chatID: Long?) {
 
 /*
 Each thread must have its Rhino context entered; this is used as
-construnct for portions of code with specific contexts.
+construct for portions of code with specific contexts.
  */
 fun withContext(x: (ctx: Context) -> Unit) {
     val ctx = Context.enter()
