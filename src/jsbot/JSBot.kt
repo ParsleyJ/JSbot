@@ -12,8 +12,8 @@ import java.util.concurrent.TimeUnit
 import kotlin.system.exitProcess
 
 class JSBot(
-    private val scopemap: MutableMap<Long, Scriptable>,
-    private val userChatMap: MutableMap<Int, Long>,
+    private val scopemap: MutableMap<Long, Scriptable>, //maps chat IDs to the scope reserved to such chats
+    private val userChatMap: MutableMap<Int, Long>, //maps user IDs to their private chats with the bot
     private val username: String,
     private val botToken: String
 ) : TelegramLongPollingBot() {
@@ -34,11 +34,11 @@ class JSBot(
                         return@wc
                     }
 
-                    if(message.isUserMessage && message.from.userName !== null){
+                    if (message.isUserMessage && message.from.userName !== null) {
                         userChatMap[message.from.id] = message.chatId
                     }
 
-                    if(message.hasText() && message.text !== null) {
+                    if (message.hasText() && message.text !== null) {
                         val text = message.text
                         if (text.isNotEmpty()) {
                             println("Received: '$text' from ${message.chatId}:${message.from?.userName}")
@@ -58,8 +58,8 @@ class JSBot(
 
     private fun authorized(message: Message) =
         message.isUserMessage
-        || message.isGroupMessage
-        || message.isSuperGroupMessage
+                || message.isGroupMessage
+                || message.isSuperGroupMessage
 
 
     /*
@@ -79,31 +79,32 @@ class JSBot(
                 Callable {
                     withContext { it2 ->
 
-                        if(text == "SEPPUKU"){
+                        if (text == "SEPPUKU") {
                             exitProcess(2)
                         }
 
                         val showError = text.startsWith("JS ")
                         try {
-                            val result = if(showError){
+                            val result = if (showError) {
                                 try {
                                     Context.toString(it2.evaluateString(scope, text.substring(3), "<cmd>", 1, null))
-                                }catch(e:RhinoException){
+                                } catch (e: RhinoException) {
                                     println(e.message)
                                     e.message
                                 }
-                            }else {
+                            } else {
                                 Context.toString(it2.evaluateString(scope, text, "<cmd>", 1, null))
                             }
 
-                            execute(SendMessage()
-                                .setChatId(message.chatId)
-                                .setText(result)
-                                .disableNotification()
+                            execute(
+                                SendMessage()
+                                    .setChatId(message.chatId)
+                                    .setText(result)
+                                    .disableNotification()
                             )
                         } catch (e: TelegramApiException) {
                             e.printStackTrace()
-                        } catch (e: RhinoException){
+                        } catch (e: RhinoException) {
                             println(e.message)
                         }
                         println("Ended Job.")
@@ -125,7 +126,7 @@ class JSBot(
             if (scopemap.containsKey(chatID)) {
                 scopemap[chatID]
             } else {
-                val scope = cx.initStandardObjects()
+                val scope = cx.initSafeStandardObjects()
                 scopemap[chatID] = scope
                 scope
             }
@@ -138,41 +139,52 @@ class JSBot(
         return result
     }
 
-    fun addStuff(to:Scriptable, bot: JSBot, message: Message) {
+    fun addStuff(to: Scriptable, bot: JSBot, message: Message) {
 
         val chatID = message.chatId
         val userId = message.from.id
         //defines native "message" function
+
+        var remaining = 10
+
         val message1 = object : BaseFunction() {
+
             override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<Any>): Any? {
-                if (args.isNotEmpty()) {
+                if (args.isNotEmpty() && remaining > 0) {
                     var text = Context.toString(args[0])
                     text = if (text === null || text.isEmpty()) "_" else text
-                    bot.execute(SendMessage()
-                        .setChatId(chatID)
-                        .setText(text)
-                        .disableNotification()
+                    bot.execute(
+                        SendMessage()
+                            .setChatId(chatID)
+                            .setText(text)
+                            .disableNotification()
                     )
+                    --remaining
                 }
                 return Undefined.instance
             }
+
             override fun getArity(): Int {
                 return 1
             }
         }
 
 
+
+
+
         //adds the message function to the scope
-        ScriptableObject.defineProperty(
-            to, "message", message1,
-            ScriptableObject.DONTENUM or ScriptableObject.PERMANENT or ScriptableObject.READONLY
+        ScriptableObject.putProperty(
+            to, "message", message1
+            //, ScriptableObject.DONTENUM or ScriptableObject.PERMANENT or ScriptableObject.READONLY
         )
 
 
-        if(userChatMap.containsKey(userId)) {
-            ScriptableObject.defineProperty(
-                to, "me",  scopemap[userChatMap[userId]]?:Undefined.instance,
-                ScriptableObject.DONTENUM or ScriptableObject.PERMANENT or ScriptableObject.READONLY
+        if (userChatMap.containsKey(userId)) {
+            ScriptableObject.putProperty(
+                to, "me", scopemap[userChatMap[userId]] ?: Undefined.instance
+                //,
+                //ScriptableObject.DONTENUM or ScriptableObject.PERMANENT or ScriptableObject.READONLY
 
             )
         }
@@ -180,8 +192,6 @@ class JSBot(
     }
 
 }
-
-
 
 
 /*
