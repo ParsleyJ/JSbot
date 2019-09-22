@@ -157,3 +157,6 @@ Temporary Items
 .apdisk
 
 # End of https://www.gitignore.io/api/java,macos,kotlin,intellij
+.idea
+*.iml
+/JSBot.properties
