@@ -29,14 +29,16 @@ class JSBot(
                     if (!authorized(message)) {
                         return@wc
                     }
-                    val text = message.text!!
-                    if (text.isNotEmpty()) {
-                        println("Received: '$text' from ${message.chatId}:${message.from?.userName}")
-                        val bot = this
-                        val scope = scopeGet(it, message.chatId, bot)!!
+                    if(message.hasText() && message.text !== null) {
+                        val text = message.text
+                        if (text.isNotEmpty()) {
+                            println("Received: '$text' from ${message.chatId}:${message.from?.userName}")
+                            val bot = this
+                            val scope = scopeGet(it, message.chatId, bot)!!
 
-                        doInTime(scope, text, message, 10)
+                            doInTime(scope, text, message, 10)
 
+                        }
                     }
                 }
             } catch (e: KotlinNullPointerException) {
