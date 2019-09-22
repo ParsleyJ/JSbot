@@ -26,13 +26,17 @@ fun main() {
         val username = properties.getProperty("tgapi.botUsername")
         println("token loaded = $token")
         println("username loaded = $username")
+
+        //todo add persistence
         val scopemap = mutableMapOf<Long, Scriptable>()
+        val userchatmap = mutableMapOf<Int, Long>()
+
 
         ApiContextInitializer.init()
 
         val botsApi = TelegramBotsApi()
         try {
-            botsApi.registerBot(JSBot(scopemap, username, token))
+            botsApi.registerBot(JSBot(scopemap, userchatmap, username, token))
         } catch (e: TelegramApiException) {
             e.printStackTrace()
         }

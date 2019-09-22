@@ -13,6 +13,7 @@ import kotlin.system.exitProcess
 
 class JSBot(
     private val scopemap: MutableMap<Long, Scriptable>,
+    private val userChatMap: MutableMap<Int, Long>,
     private val username: String,
     private val botToken: String
 ) : TelegramLongPollingBot() {
@@ -25,17 +26,24 @@ class JSBot(
         withContext wc@{
             try {
                 update!!
+
+
                 if (update.hasMessage()) {
                     val message = update.message!!
                     if (!authorized(message)) {
                         return@wc
                     }
+
+                    if(message.isUserMessage && message.from.userName !== null){
+                        userChatMap[message.from.id] = message.chatId
+                    }
+
                     if(message.hasText() && message.text !== null) {
                         val text = message.text
                         if (text.isNotEmpty()) {
                             println("Received: '$text' from ${message.chatId}:${message.from?.userName}")
                             val bot = this
-                            val scope = scopeGet(it, message.chatId, bot)!!
+                            val scope = scopeGet(it, message, bot)!!
 
                             doInTime(scope, text, message, 3)
 
@@ -111,7 +119,8 @@ class JSBot(
         executor.shutdown()
     }
 
-    private fun scopeGet(cx: Context, chatID: Long?, bot: JSBot): Scriptable? {
+    private fun scopeGet(cx: Context, message: Message, bot: JSBot): Scriptable? {
+        val chatID = message.chatId
         val result = if (chatID !== null) {
             if (scopemap.containsKey(chatID)) {
                 scopemap[chatID]
@@ -123,40 +132,57 @@ class JSBot(
         } else {
             null
         }
-        result?.addStuff(bot, chatID)
+        if (result != null) {
+            addStuff(result, bot, message)
+        }
         return result
     }
 
-}
+    fun addStuff(to:Scriptable, bot: JSBot, message: Message) {
 
-
-fun Scriptable.addStuff(bot: JSBot, chatID: Long?) {
-
-    //defines native "message" function
-    val message1 = object : BaseFunction() {
-        override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<Any>): Any? {
-            if (args.isNotEmpty()) {
-                var text = Context.toString(args[0])
-                text = if (text === null || text.isEmpty()) "_" else text
-                bot.execute(SendMessage()
-                    .setChatId(chatID)
-                    .setText(text)
-                    .disableNotification()
-                )
+        val chatID = message.chatId
+        val userId = message.from.id
+        //defines native "message" function
+        val message1 = object : BaseFunction() {
+            override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<Any>): Any? {
+                if (args.isNotEmpty()) {
+                    var text = Context.toString(args[0])
+                    text = if (text === null || text.isEmpty()) "_" else text
+                    bot.execute(SendMessage()
+                        .setChatId(chatID)
+                        .setText(text)
+                        .disableNotification()
+                    )
+                }
+                return Undefined.instance
             }
-            return Undefined.instance
+            override fun getArity(): Int {
+                return 1
+            }
         }
-        override fun getArity(): Int {
-            return 1
+
+
+        //adds the message function to the scope
+        ScriptableObject.defineProperty(
+            to, "message", message1,
+            ScriptableObject.DONTENUM or ScriptableObject.PERMANENT or ScriptableObject.READONLY
+        )
+
+
+        if(userChatMap.containsKey(userId)) {
+            ScriptableObject.defineProperty(
+                to, "me",  scopemap[userChatMap[userId]]?:Undefined.instance,
+                ScriptableObject.DONTENUM or ScriptableObject.PERMANENT or ScriptableObject.READONLY
+
+            )
         }
+
     }
-    //adds the message function to the scope
-    ScriptableObject.defineProperty(
-        this, "message", message1,
-        ScriptableObject.DONTENUM or ScriptableObject.PERMANENT or ScriptableObject.READONLY
-    )
 
 }
+
+
+
 
 /*
 Each thread must have its Rhino context entered; this is used as
