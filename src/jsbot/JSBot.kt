@@ -9,6 +9,7 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import kotlin.system.exitProcess
 
 class JSBot(
     private val scopemap: MutableMap<Long, Scriptable>,
@@ -69,17 +70,33 @@ class JSBot(
             mutableListOf(
                 Callable {
                     withContext { it2 ->
-                        val result = it2.evaluateString(scope, text, "<cmd>", 1, null)
-                        val send = SendMessage()
-                            .setChatId(message.chatId)
-                            .setText(Context.toString(result))
-                            .disableNotification()
 
+                        if(text == "GETOUT"){
+                            exitProcess(2)
+                        }
 
+                        val showError = text.startsWith("JS ")
                         try {
-                            execute(send)
+                            val result = if(showError){
+                                try {
+                                    Context.toString(it2.evaluateString(scope, text.substring(3), "<cmd>", 1, null))
+                                }catch(e:RhinoException){
+                                    println(e.message)
+                                    e.message
+                                }
+                            }else {
+                                Context.toString(it2.evaluateString(scope, text, "<cmd>", 1, null))
+                            }
+
+                            execute(SendMessage()
+                                .setChatId(message.chatId)
+                                .setText(result)
+                                .disableNotification()
+                            )
                         } catch (e: TelegramApiException) {
                             e.printStackTrace()
+                        } catch (e: RhinoException){
+                            println(e.message)
                         }
                         println("Ended Job.")
                     }
