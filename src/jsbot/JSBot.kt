@@ -85,27 +85,46 @@ class JSBot(
 
                         val showError = text.startsWith("JS ")
                         try {
-                            val result = if (showError) {
+                            val result: Any? = if (showError) {
                                 try {
-                                    Context.toString(it2.evaluateString(scope, text.substring(3), "<cmd>", 1, null))
+                                    it2.evaluateString(scope, text.substring(3), "<cmd>", 1, null)
                                 } catch (e: RhinoException) {
+                                    println(e.message)
+                                    e.message
+                                } catch (e: JSBotException) {
                                     println(e.message)
                                     e.message
                                 }
                             } else {
-                                Context.toString(it2.evaluateString(scope, text, "<cmd>", 1, null))
+                                it2.evaluateString(scope, text, "<cmd>", 1, null)
+                            }
+
+                            try{
+                                val media = Context.jsToJava(result, SimpleMedia::class.java) as SimpleMedia?
+                                if(media!==null){
+                                    SimpleMedia.send(media, message.chatId, this)
+                                }
+                            }catch(e : EvaluatorException){
+                                var textResult = Context.toString(result)
+                                textResult = if (textResult === null) "" else textResult
+                                if(textResult.isNotBlank()) {
+                                    execute(
+                                        SendMessage()
+                                            .setChatId(message.chatId)
+                                            .setText(textResult)
+                                            .setReplyToMessageId(message.messageId)
+                                            .disableNotification()
+                                    )
+                                }
                             }
 
 
-                            execute(SendMessage()
-                                    .setChatId(message.chatId)
-                                    .setText(result)
-                                    .setReplyToMessageId(message.messageId)
-                                    .disableNotification())
 
                         } catch (e: TelegramApiException) {
                             e.printStackTrace()
                         } catch (e: RhinoException) {
+                            println(e.message)
+                        } catch (e: JSBotException) {
                             println(e.message)
                         }
                         println("Ended Job.")
@@ -161,6 +180,8 @@ class JSBot(
                             .disableNotification()
                     )
                     --remaining
+                }else if (remaining <= 0){
+                    throw JSBotException("Message limit reached.")
                 }
                 return Undefined.instance
             }
@@ -171,16 +192,57 @@ class JSBot(
         }
 
 
+        val sendMedia1 = object : BaseFunction() {
+
+            override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<Any>): Any? {
+                if (args.isNotEmpty() && remaining > 0) {
+                    val media = Context.jsToJava(args[0], SimpleMedia::class.java)
+                    SimpleMedia.send(media as SimpleMedia, chatID, bot)
+                    --remaining
+                }else if (remaining <= 0){
+                    throw JSBotException("Message limit reached.")
+                }
+                return Undefined.instance
+            }
+
+            override fun getArity(): Int {
+                return 1
+            }
+        }
+
 
         //adds the message function to the scope
         ScriptableObject.putProperty(to, "message", message1)
 
+        //adds the sendMedia function to the scope
+        ScriptableObject.putProperty(to, "sendMedia", sendMedia1)
+
         //adds the "me" dynamic reference
         if (userChatMap.containsKey(userId)) {
             ScriptableObject.putProperty(to, "me", scopemap[userChatMap[userId]] ?: Undefined.instance)
+        }else{
+            ScriptableObject.putProperty(to, "me", Undefined.instance)
         }
 
+        //adds the media in the message the user is referring to (or null if not present)
+        val referredMedia = Context.javaToJS(SimpleMedia.fromMessage(message.replyToMessage), to)
+        ScriptableObject.putProperty(to, "refMedia", referredMedia)
+
+
+        //adds the text in the message the user is referring to (or null if not present)
+        val referredText =  if(message.replyToMessage!==null && message.replyToMessage.hasText() && message.replyToMessage.text !== null) {
+            Context.javaToJS(message.replyToMessage.text, to)
+        }else{
+            Context.javaToJS(null, to)
+        }
+        ScriptableObject.putProperty(to, "refText", referredText)
+
+
+
+
     }
+
+    class JSBotException(message:String) : RuntimeException(message)
 
 }
 
