@@ -80,7 +80,7 @@ class JSBot(
                     withContext { it2 ->
 
                         if (text == "SEPPUKU") {
-                            exitProcess(2)
+                            exitProcess(2) //HARAKIRIIIII
                         }
 
                         val showError = text.startsWith("JS ")
@@ -96,12 +96,13 @@ class JSBot(
                                 Context.toString(it2.evaluateString(scope, text, "<cmd>", 1, null))
                             }
 
-                            execute(
-                                SendMessage()
+
+                            execute(SendMessage()
                                     .setChatId(message.chatId)
                                     .setText(result)
-                                    .disableNotification()
-                            )
+                                    .setReplyToMessageId(message.messageId)
+                                    .disableNotification())
+
                         } catch (e: TelegramApiException) {
                             e.printStackTrace()
                         } catch (e: RhinoException) {
@@ -171,22 +172,12 @@ class JSBot(
 
 
 
-
-
         //adds the message function to the scope
-        ScriptableObject.putProperty(
-            to, "message", message1
-            //, ScriptableObject.DONTENUM or ScriptableObject.PERMANENT or ScriptableObject.READONLY
-        )
+        ScriptableObject.putProperty(to, "message", message1)
 
-
+        //adds the "me" dynamic reference
         if (userChatMap.containsKey(userId)) {
-            ScriptableObject.putProperty(
-                to, "me", scopemap[userChatMap[userId]] ?: Undefined.instance
-                //,
-                //ScriptableObject.DONTENUM or ScriptableObject.PERMANENT or ScriptableObject.READONLY
-
-            )
+            ScriptableObject.putProperty(to, "me", scopemap[userChatMap[userId]] ?: Undefined.instance)
         }
 
     }
