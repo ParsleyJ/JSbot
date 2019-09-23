@@ -99,15 +99,15 @@ class JSBot(
                                 it2.evaluateString(scope, text, "<cmd>", 1, null)
                             }
 
-                            try{
+                            try {
                                 val media = Context.jsToJava(result, SimpleMedia::class.java) as SimpleMedia?
-                                if(media!==null){
+                                if (media !== null) {
                                     SimpleMedia.send(media, message.chatId, this)
                                 }
-                            }catch(e : EvaluatorException){
+                            } catch (e: EvaluatorException) {
                                 var textResult = Context.toString(result)
                                 textResult = if (textResult === null) "" else textResult
-                                if(textResult.isNotBlank()) {
+                                if (textResult.isNotBlank()) {
                                     execute(
                                         SendMessage()
                                             .setChatId(message.chatId)
@@ -117,8 +117,6 @@ class JSBot(
                                     )
                                 }
                             }
-
-
 
                         } catch (e: TelegramApiException) {
                             e.printStackTrace()
@@ -180,7 +178,7 @@ class JSBot(
                             .disableNotification()
                     )
                     --remaining
-                }else if (remaining <= 0){
+                } else if (remaining <= 0) {
                     throw JSBotException("Message limit reached.")
                 }
                 return Undefined.instance
@@ -199,7 +197,7 @@ class JSBot(
                     val media = Context.jsToJava(args[0], SimpleMedia::class.java)
                     SimpleMedia.send(media as SimpleMedia, chatID, bot)
                     --remaining
-                }else if (remaining <= 0){
+                } else if (remaining <= 0) {
                     throw JSBotException("Message limit reached.")
                 }
                 return Undefined.instance
@@ -220,7 +218,7 @@ class JSBot(
         //adds the "me" dynamic reference
         if (userChatMap.containsKey(userId)) {
             ScriptableObject.putProperty(to, "me", scopemap[userChatMap[userId]] ?: Undefined.instance)
-        }else{
+        } else {
             ScriptableObject.putProperty(to, "me", Undefined.instance)
         }
 
@@ -230,19 +228,24 @@ class JSBot(
 
 
         //adds the text in the message the user is referring to (or null if not present)
-        val referredText =  if(message.replyToMessage!==null && message.replyToMessage.hasText() && message.replyToMessage.text !== null) {
-            Context.javaToJS(message.replyToMessage.text, to)
-        }else{
-            Context.javaToJS(null, to)
-        }
+        val referredText =
+            if (message.replyToMessage !== null && message.replyToMessage.hasText() && message.replyToMessage.text !== null) {
+                Context.javaToJS(message.replyToMessage.text, to)
+            } else {
+                Context.javaToJS(null, to)
+            }
         ScriptableObject.putProperty(to, "refText", referredText)
 
 
-
+        if(referredMedia!==null){
+            ScriptableObject.putProperty(to, "that", referredMedia)
+        }else{
+            ScriptableObject.putProperty(to, "that", referredText)
+        }
 
     }
 
-    class JSBotException(message:String) : RuntimeException(message)
+    class JSBotException(message: String) : RuntimeException(message)
 
 }
 
