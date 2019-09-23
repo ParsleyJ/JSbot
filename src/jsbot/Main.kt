@@ -58,7 +58,9 @@ fun main(args:Array<String>) {
 
         val botsApi = TelegramBotsApi()
         try {
-            botsApi.registerBot(JSBot(scopemap, userchatmap, username, token))
+            val jsbot = JSBot(scopemap, userchatmap, username, token)
+            jsbot.loadChats()
+            botsApi.registerBot(jsbot)
         } catch (e: TelegramApiException) {
             e.printStackTrace()
         }

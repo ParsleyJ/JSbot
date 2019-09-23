@@ -41,6 +41,7 @@ class SimpleMedia(var mediaType:String, var fileID:String) {
                 return
             }
             val fileID = media.fileID
+
             when (media.mediaType) {
                 ANIMATION -> bot.execute(SendAnimation().setAnimation(fileID).setChatId(chatID).disableNotification())
                 AUDIO -> bot.execute(SendAudio().setAudio(fileID).setChatId(chatID).disableNotification())

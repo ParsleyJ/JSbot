@@ -10,6 +10,8 @@ import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.system.exitProcess
+import java.io.*
+
 
 class JSBot(
     private val scopemap: MutableMap<Long, Scriptable>, //maps chat IDs to the scope reserved to such chats
@@ -45,13 +47,48 @@ class JSBot(
                             val bot = this
                             val scope = scopeGet(it, message, bot)!!
 
+
+
                             doInTime(scope, text, message, 3)
+
+                            val saved = scope.get("saved", scope)
+                            if(saved != Scriptable.NOT_FOUND
+                                && saved != Context.getUndefinedValue()
+                                && saved is ScriptableObject){
+                                saveScope(message.chatId, it, saved)
+                            }
+
+                            saveChats()
+
 
                         }
                     }
                 }
             } catch (e: KotlinNullPointerException) {
                 e.printStackTrace()
+            }
+        }
+    }
+
+    private fun saveChats() {
+        val fileout = File("userchats.jsbot")
+        fileout.bufferedWriter().use {
+            userChatMap.forEach { (user, chat) ->
+                it.append("$user $chat")
+                it.newLine()
+            }
+        }
+    }
+
+    fun loadChats() {
+        val filein = File("userchats.jsbot")
+        if(filein.exists() && filein.isFile) {
+            filein.bufferedReader().useLines {
+                it.forEach { line ->
+                    val user = line.split(" ")[0]
+                    val chat = line.split(" ")[1]
+                    userChatMap.put(Integer.parseInt(user), java.lang.Long.parseLong(chat))
+                }
             }
         }
     }
@@ -84,10 +121,12 @@ class JSBot(
                         }
 
                         val showError = text.startsWith("JS ")
+                        var command = text
                         try {
                             val result: Any? = if (showError) {
                                 try {
-                                    it2.evaluateString(scope, text.substring(3), "<cmd>", 1, null)
+                                    command = text.substring(3)
+                                    it2.evaluateString(scope, command, "<cmd>", 1, null)
                                 } catch (e: RhinoException) {
                                     println(e.message)
                                     e.message
@@ -96,7 +135,7 @@ class JSBot(
                                     e.message
                                 }
                             } else {
-                                it2.evaluateString(scope, text, "<cmd>", 1, null)
+                                it2.evaluateString(scope, command, "<cmd>", 1, null)
                             }
 
                             try {
@@ -145,6 +184,27 @@ class JSBot(
                 scopemap[chatID]
             } else {
                 val scope = cx.initSafeStandardObjects()
+
+                val file = File(scopeFileName(message.chatId))
+                if(file.exists() && file.isFile){
+                    ScriptableObject.defineProperty(
+                        scope,
+                        "saved",
+                        loadScope(chatID, cx, cx.newObject(scope)),
+                        ScriptableObject.READONLY or ScriptableObject.PERMANENT or ScriptableObject.DONTENUM
+                    )
+
+                }else {
+                    ScriptableObject.defineProperty(
+                        scope,
+                        "saved",
+                        cx.newObject(scope),
+                        ScriptableObject.READONLY or ScriptableObject.PERMANENT or ScriptableObject.DONTENUM
+                    )
+                }
+
+
+
                 scopemap[chatID] = scope
                 scope
             }
@@ -153,6 +213,15 @@ class JSBot(
         }
         if (result != null) {
             addStuff(result, bot, message)
+
+            if(!ScriptableObject.hasProperty(result, "saved")){
+                ScriptableObject.defineProperty(
+                    result,
+                    "saved",
+                    cx.newObject(result),
+                    ScriptableObject.READONLY or ScriptableObject.PERMANENT or ScriptableObject.DONTENUM
+                )
+            }
         }
         return result
     }
@@ -209,6 +278,8 @@ class JSBot(
         }
 
 
+
+
         //adds the message function to the scope
         ScriptableObject.putProperty(to, "message", message1)
 
@@ -243,6 +314,60 @@ class JSBot(
             ScriptableObject.putProperty(to, "that", referredText)
         }
 
+        /*ScriptableObject.putProperty(to, "save", object : BaseFunction(){
+            override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<Any>): Any? {
+                scopemap[chatID]?.let { save(chatID, it) }
+                //scopemap[chatID]?.let { save2(chatID, it) }
+                return Undefined.instance
+            }
+            override fun getArity(): Int {
+                return 0
+            }
+        })*/
+
+
+    }
+
+    fun scopeFileName(chatId: Long) = "scope$chatId.js"
+
+    fun saveScope(chatId:Long, context: Context, saved:Scriptable){
+        val filename = scopeFileName(chatId)
+        println("Saving Scope $filename")
+
+        PrintWriter(FileOutputStream(filename)).use{
+            val source = serialize(context, saved)
+            it.println(source)
+        }
+    }
+
+    private fun serialize(context: Context, theObject: Scriptable) :String{
+        val result = context.evaluateString(
+            theObject,
+            "toSource()",
+            "<save>",
+            1,
+            null
+        )
+        return Context.toString(result)
+    }
+
+
+    private fun loadScope(chatId:Long, context: Context, saved:Scriptable): Any{
+        val filename = scopeFileName(chatId)
+        val file = File(filename)
+        if(file.exists() && file.isFile) {
+            val fis = FileInputStream(file)
+            fis.bufferedReader().use {
+                val result = context.evaluateReader(saved, it, "<load>", 1, null)
+                if (result == Scriptable.NOT_FOUND || result === null) {
+                    return Context.getUndefinedValue()
+                }
+                return result
+            }
+        }
+
+        return Context.getUndefinedValue()
+
     }
 
     class JSBotException(message: String) : RuntimeException(message)
@@ -256,6 +381,7 @@ construct for portions of code with specific contexts.
  */
 fun withContext(x: (ctx: Context) -> Unit) {
     val ctx = Context.enter()
+    ctx.optimizationLevel = -1
     try {
         x.invoke(ctx)
     } finally {
