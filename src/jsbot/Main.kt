@@ -20,7 +20,7 @@ fun main(args:Array<String>) {
 
 
     if(args.size>1){
-        println("Working Directory = ${System.getProperty("user.dir")}")
+        println("Usage: java -jar JSBot (properties-file)")
         return
     }
 
