@@ -45,7 +45,7 @@ class JSBot(
                         if (text.isNotEmpty()) {
                             println("Received: '$text' from ${message.chatId}:${message.from?.userName}")
                             val bot = this
-                            val scope = scopeGet(it, message, bot)!!
+                            val scope = retrieveScope(it, message, bot)!!
 
 
 
@@ -116,7 +116,7 @@ class JSBot(
                 Callable {
                     withContext { it2 ->
 
-                        if (text == "SEPPUKU") {
+                        if (text.startsWith("SEPPUKU")) {
                             exitProcess(2) //HARAKIRIIIII
                         }
 
@@ -138,23 +138,15 @@ class JSBot(
                                 it2.evaluateString(scope, command, "<cmd>", 1, null)
                             }
 
-                            try {
-                                val media = Context.jsToJava(result, SimpleMedia::class.java) as SimpleMedia?
-                                if (media !== null) {
-                                    SimpleMedia.send(media, message.chatId, this)
+                            if(result is Scriptable){
+                                val media = SimpleMedia.fromJS(result)
+                                if(media !== null){
+                                    replyWithSimpleMedia(media, message)
+                                }else{
+                                    replyWithText(result, message)
                                 }
-                            } catch (e: EvaluatorException) {
-                                var textResult = Context.toString(result)
-                                textResult = if (textResult === null) "" else textResult
-                                if (textResult.isNotBlank()) {
-                                    execute(
-                                        SendMessage()
-                                            .setChatId(message.chatId)
-                                            .setText(textResult)
-                                            .setReplyToMessageId(message.messageId)
-                                            .disableNotification()
-                                    )
-                                }
+                            }else{
+                                replyWithText(result, message)
                             }
 
                         } catch (e: TelegramApiException) {
@@ -177,7 +169,25 @@ class JSBot(
         executor.shutdown()
     }
 
-    private fun scopeGet(cx: Context, message: Message, bot: JSBot): Scriptable? {
+    private fun JSBot.replyWithText(result: Any?, message: Message) {
+        var textResult = Context.toString(result)
+        textResult = if (textResult === null) "" else textResult
+        if (textResult.isNotBlank()) {
+            execute(
+                SendMessage()
+                    .setChatId(message.chatId)
+                    .setText(textResult)
+                    .setReplyToMessageId(message.messageId)
+                    .disableNotification()
+            )
+        }
+    }
+
+    private fun replyWithSimpleMedia(media: SimpleMedia?, message: Message) {
+        SimpleMedia.send(media, message.chatId, this)
+    }
+
+    private fun retrieveScope(cx: Context, message: Message, bot: JSBot): Scriptable? {
         val chatID = message.chatId
         val result = if (chatID !== null) {
             if (scopemap.containsKey(chatID)) {
@@ -212,7 +222,7 @@ class JSBot(
             null
         }
         if (result != null) {
-            addStuff(result, bot, message)
+            addStuff(cx, result, bot, message)
 
             if(!ScriptableObject.hasProperty(result, "saved")){
                 ScriptableObject.defineProperty(
@@ -226,7 +236,7 @@ class JSBot(
         return result
     }
 
-    fun addStuff(to: Scriptable, bot: JSBot, message: Message) {
+    fun addStuff(cx: Context, to: Scriptable, bot: JSBot, message: Message) {
 
         val chatID = message.chatId
         val userId = message.from.id
@@ -263,9 +273,14 @@ class JSBot(
 
             override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<Any>): Any? {
                 if (args.isNotEmpty() && remaining > 0) {
-                    val media = Context.jsToJava(args[0], SimpleMedia::class.java)
-                    SimpleMedia.send(media as SimpleMedia, chatID, bot)
-                    --remaining
+                    val argument = args[0]
+                    if(argument is Scriptable){
+                        val media = SimpleMedia.fromJS(argument)
+                        if(media !== null) {
+                            SimpleMedia.send(media, chatID, bot)
+                            --remaining
+                        }
+                    }
                 } else if (remaining <= 0) {
                     throw JSBotException("Message limit reached.")
                 }
@@ -294,7 +309,7 @@ class JSBot(
         }
 
         //adds the media in the message the user is referring to (or null if not present)
-        val referredMedia = Context.javaToJS(SimpleMedia.fromMessage(message.replyToMessage), to)
+        val referredMedia =  SimpleMedia.fromMessage(message.replyToMessage)?.toJS(cx, to)
         ScriptableObject.putProperty(to, "refMedia", referredMedia)
 
 
@@ -313,18 +328,6 @@ class JSBot(
         }else{
             ScriptableObject.putProperty(to, "that", referredText)
         }
-
-        /*ScriptableObject.putProperty(to, "save", object : BaseFunction(){
-            override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<Any>): Any? {
-                scopemap[chatID]?.let { save(chatID, it) }
-                //scopemap[chatID]?.let { save2(chatID, it) }
-                return Undefined.instance
-            }
-            override fun getArity(): Int {
-                return 0
-            }
-        })*/
-
 
     }
 
