@@ -160,3 +160,5 @@ Temporary Items
 .idea
 *.iml
 /JSBot.properties
+/userchats.jsbot
+scope*.js
