@@ -1,6 +1,5 @@
 package jsbot
 
-import com.fasterxml.jackson.annotation.JsonAlias
 import org.mozilla.javascript.*
 import org.telegram.telegrambots.bots.TelegramLongPollingBot
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
@@ -16,17 +15,17 @@ import java.io.*
 
 
 class JSBot(
-    private val creator: String,
-    private val creatorId: Int,
-    private val scopemap: MutableMap<Long, Scriptable>, //maps chat IDs to the scope reserved to such chats
-    private val usernamesMap: MutableMap<String, Int>, //maps usernames their user IDs
-    private val userRoles: MutableMap<Int, Role>, //maps user IDs to their Role
+    public val creator: String,
+    public val creatorId: Int,
+    public val scopemap: MutableMap<Long, Scriptable>, //maps chat IDs to the scope reserved to such chats
+    public val usernamesMap: MutableMap<String, Int>, //maps usernames their user IDs
+    public val userRoles: MutableMap<Int, Role>, //maps user IDs to their Role
     private val username: String,
     private val botToken: String
 ) : TelegramLongPollingBot() {
 
 
-    companion object{
+    companion object {
         const val defaultRole = Role.USER_ROLE
     }
 
@@ -45,17 +44,18 @@ class JSBot(
                     println()
                     println("From ${message.chatId}:${message.from?.id}:${message.from?.userName} --------------")
 
-                    if(message.isUserMessage && message.chatId!== null
-                        && !retrieveRoleFromId(message.chatId.toInt()).isAuthorized(Role.PRIVATE_USE_BOT_ABILITY)){
-                        println("Not authorized: "+Role.PRIVATE_USE_BOT_ABILITY)
+                    if (message.isUserMessage && message.chatId !== null
+                        && !retrieveRoleFromId(message.chatId.toInt()).isAuthorized(Role.PRIVATE_USE_BOT_ABILITY)
+                    ) {
+                        println("Not authorized: " + Role.PRIVATE_USE_BOT_ABILITY)
                         return@wc
                     }
 
-                    if((message.isGroupMessage || message.isSuperGroupMessage)){
+                    if ((message.isGroupMessage || message.isSuperGroupMessage)) {
                         val role = retrieveRoleFromUser(message.from)
 
-                        if(!role.isAuthorized(Role.GROUP_USE_BOT_ABILITY)){
-                            println("Not authorized: "+Role.GROUP_USE_BOT_ABILITY)
+                        if (!role.isAuthorized(Role.GROUP_USE_BOT_ABILITY)) {
+                            println("Not authorized: " + Role.GROUP_USE_BOT_ABILITY)
                             return@wc
                         }
                     }
@@ -69,17 +69,18 @@ class JSBot(
                         val text = message.text
                         if (text.isNotEmpty()) {
                             println("Text: '$text'")
-                            val bot = this
-                            val scope = retrieveScope(it, message, bot)!!
+
+                            val scope = retrieveScope(it, message.chatId, message)!!
 
 
 
                             doInTime(scope, text, message, 3)
 
                             val saved = scope.get("saved", scope)
-                            if(saved != Scriptable.NOT_FOUND
+                            if (saved != Scriptable.NOT_FOUND
                                 && saved != Context.getUndefinedValue()
-                                && saved is ScriptableObject){
+                                && saved is ScriptableObject
+                            ) {
                                 saveScope(message.chatId, it, saved)
                             }
 
@@ -97,6 +98,7 @@ class JSBot(
     }
 
     private fun saveUsernameMap() {
+        println("save usernames, size:${usernamesMap.size}")
         val fileout = File("userchats.jsbot")
         fileout.bufferedWriter().use {
             usernamesMap.forEach { (userName, userId) ->
@@ -108,7 +110,7 @@ class JSBot(
 
     fun loadUsernames() {
         val filein = File("userchats.jsbot")
-        if(filein.exists() && filein.isFile) {
+        if (filein.exists() && filein.isFile) {
             filein.bufferedReader().useLines {
                 it.forEach { line ->
                     val split = line.split(" ")
@@ -118,9 +120,14 @@ class JSBot(
                 }
             }
         }
+        println("loaded usernames, size:${usernamesMap.size}")
+        usernamesMap.forEach{(name, id)->
+            println("$name:$id")
+        }
     }
 
-    private fun saveUserRoles(){
+    private fun saveUserRoles() {
+        println("save user roles, size:${userRoles.size}")
         val fileout = File("userroles.jsbot")
         fileout.bufferedWriter().use {
             userRoles.forEach { (userId, role) ->
@@ -142,19 +149,25 @@ class JSBot(
                 }
             }
         }
+        println("loaded user roles, size:${userRoles.size}")
+        userRoles.forEach{(name, role)->
+            println("$name:${role.getRoleName()}")
+        }
     }
 
 
-    private fun retrieveRoleFromUserName(username: String):Role? {
+
+
+    private fun retrieveRoleFromUserName(username: String): Role? {
         val userid = usernamesMap[username]
-        return if(userid!==null){
+        return if (userid !== null) {
             retrieveRoleFromId(userid)
-        }else{
+        } else {
             null
         }
     }
 
-    private fun retrieveRoleFromId(userid: Int):Role{
+    private fun retrieveRoleFromId(userid: Int): Role {
         var role = userRoles[userid]
         if (role === null) {
             role = Role.create(defaultRole)!!
@@ -163,18 +176,17 @@ class JSBot(
         return role
     }
 
-    private fun retrieveRoleFromUser(user:User):Role{
+    private fun retrieveRoleFromUser(user: User): Role {
         val fromUN = user.userName
         val fromID = user.id
-        return if(fromUN !== null && usernamesMap.containsKey(fromUN)) {
+        return if (fromUN !== null && usernamesMap.containsKey(fromUN)) {
             retrieveRoleFromUserName(fromUN)!!
-        }else if(fromID !==null && fromID>0){
+        } else if (fromID !== null && fromID > 0) {
             retrieveRoleFromId(fromID)
-        }else {
+        } else {
             Role.create(defaultRole)!!
         }
     }
-
 
 
     /*
@@ -194,11 +206,8 @@ class JSBot(
                 Callable {
                     withContext { it2 ->
 
-
-
-
                         if (text.startsWith("SEPPUKU")) {
-                            if(retrieveRoleFromUser(message.from).isAuthorized(Role.PANIC_ABILITY)) {
+                            if (retrieveRoleFromUser(message.from).isAuthorized(Role.PANIC_ABILITY)) {
                                 exitProcess(2) //HARAKIRIIIII
                             }
                         }
@@ -221,14 +230,14 @@ class JSBot(
                                 it2.evaluateString(scope, command, "<cmd>", 1, null)
                             }
 
-                            if(result is Scriptable){
+                            if (result is Scriptable) {
                                 val media = SimpleMedia.fromJS(result)
-                                if(media !== null){
+                                if (media !== null) {
                                     replyWithSimpleMedia(media, message)
-                                }else{
+                                } else {
                                     replyWithText(result, message)
                                 }
-                            }else{
+                            } else {
                                 replyWithText(result, message)
                             }
 
@@ -270,44 +279,52 @@ class JSBot(
         SimpleMedia.send(media, message.chatId, this)
     }
 
-    private fun retrieveScope(cx: Context, message: Message, bot: JSBot): Scriptable? {
-        val chatID = message.chatId
-        val result = if (chatID !== null) {
-            if (scopemap.containsKey(chatID)) {
-                scopemap[chatID]
-            } else {
-                val scope = cx.initSafeStandardObjects()
 
-                val file = File(scopeFileName(message.chatId))
-                if(file.exists() && file.isFile){
-                    ScriptableObject.defineProperty(
-                        scope,
-                        "saved",
-                        loadScope(chatID, cx, cx.newObject(scope)),
-                        ScriptableObject.READONLY or ScriptableObject.PERMANENT or ScriptableObject.DONTENUM
-                    )
+    private fun retrieveScope(cx: Context, scopeID: Long, message: Message? = null): Scriptable? {
 
-                }else {
-                    ScriptableObject.defineProperty(
-                        scope,
-                        "saved",
-                        cx.newObject(scope),
-                        ScriptableObject.READONLY or ScriptableObject.PERMANENT or ScriptableObject.DONTENUM
-                    )
-                }
-
-
-
-                scopemap[chatID] = scope
-                scope
-            }
+        println("retrieving scope :$scopeID")
+        val result = if (scopemap.containsKey(scopeID)) {
+            scopemap[scopeID]
         } else {
-            null
-        }
-        if (result != null) {
-            addStuffToScope(cx, result, bot, message)
+            val scope = cx.initSafeStandardObjects()
 
-            if(!ScriptableObject.hasProperty(result, "saved")){
+            val file = File(scopeFileName(scopeID))
+            if (file.exists() && file.isFile) {
+                ScriptableObject.defineProperty(
+                    scope,
+                    "saved",
+                    loadScope(scopeID, cx, cx.newObject(scope)),
+                    ScriptableObject.READONLY or ScriptableObject.PERMANENT or ScriptableObject.DONTENUM
+                )
+
+            } else {
+                ScriptableObject.defineProperty(
+                    scope,
+                    "saved",
+                    cx.newObject(scope),
+                    ScriptableObject.READONLY or ScriptableObject.PERMANENT or ScriptableObject.DONTENUM
+                )
+            }
+
+            scopemap[scopeID] = scope
+            scope
+        }
+
+        if (result != null) {
+            if(message!==null) {
+                println("retrieving scope :$scopeID ---: adding message-dependent properties")
+                addMessageDependentStuff(cx, result, this, message)
+                println("retrieving scope :$scopeID ---: adding user-dependent properties, user: ${message.from.id}")
+                addUserStuff(cx, result, message.from.id)
+            }else{
+                if(scopeID>0){
+                    println("retrieving scope :$scopeID ---: adding user-dependent properties (user chat)")
+                    addUserStuff(cx, result, scopeID.toInt())
+                }
+            }
+
+
+            if (!ScriptableObject.hasProperty(result, "saved")) {
                 ScriptableObject.defineProperty(
                     result,
                     "saved",
@@ -319,15 +336,129 @@ class JSBot(
         return result
     }
 
-    private fun addStuffToScope(cx: Context, to: Scriptable, bot: JSBot, message: Message) {
+    private fun addUserStuff(cx: Context, to: Scriptable, userId: Int) {
+
+        //adds the "me" dynamic reference
+        ScriptableObject.putProperty(to, "my", scopemap[userId.toLong()]?:retrieveScope(cx, userId.toLong()))
+
+
+        val retrievedRole = retrieveRoleFromId(userId)
+        ScriptableObject.putProperty(to, "role", retrievedRole.getRoleName())
+
+
+        //adds "java" classpath for authorized people
+        if (retrieveRoleFromId(userId).isAuthorized(Role.JAVA_ABILITY)) {
+            ScriptableObject.putProperty(to, "java", cx.initStandardObjects())
+        } else {
+            ScriptableObject.putProperty(to, "java", null)
+        }
+
+
+        //adds access to this bot object
+        if (retrieveRoleFromId(userId).isAuthorized(Role.BOT_ACCESS_ABILITY)) {
+            ScriptableObject.putProperty(to, "bot", Context.javaToJS(this, to))
+        } else {
+            ScriptableObject.putProperty(to, "bot", null)
+        }
+
+
+        //adds ability to set other people's roles
+        var remainingRole = 1
+        ScriptableObject.putProperty(to, "setRole", object : BaseFunction() {
+            override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<Any>): Any? {
+                if (!retrieveRoleFromId(userId).isAuthorized(Role.SET_ROLES_ABILITY)) {
+                    throw JSBotException("Not authorized to set role.")
+                }
+                if (args.size == 2 && remainingRole > 0) {
+                    val argumentRole = args[1]
+                    if (argumentRole is String) {
+                        val createdRole = Role.create(argumentRole)
+
+                        if (createdRole === null) {
+                            return false
+                        }
+
+                        val argumentUN = args[0]
+                        if (argumentUN is String) {
+                            if (argumentUN == creator) {
+                                throw JSBotException("Creator's role is immutable.")
+                            }
+                            val id = usernamesMap[argumentUN]
+                            if (id !== null) {
+                                remainingRole--
+                                userRoles[id] = createdRole
+                                saveUserRoles()
+                                return true
+                            }
+
+                            return false
+                        } else if (argumentUN is Integer) {
+                            if (argumentUN == creatorId) {
+                                throw JSBotException("Creator's role is immutable.")
+                            }
+                            remainingRole--
+                            userRoles[argumentUN.toInt()] = createdRole
+                            saveUserRoles()
+                            return true
+                        }
+                    }
+                    return false
+
+                } else if (remainingRole <= 0) {
+                    throw JSBotException("Operation limit reached.")
+                }
+                return false
+            }
+
+            override fun getArity(): Int {
+                return 2
+            }
+        })
+
+
+
+        val abilityList = mutableListOf<Any>()
+        retrievedRole.getAbilites().forEach {
+            abilityList.add(it)
+        }
+        ScriptableObject.putProperty(to, "abilities", cx.newArray(to, abilityList.toTypedArray()))
+
+
+        ScriptableObject.putProperty(to, "readFile", object : BaseFunction() {
+            override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<Any>): Any? {
+                if (!retrieveRoleFromId(userId).isAuthorized(Role.LOAD_FILE_ABILITY)) {
+                    throw JSBotException("Not authorized to load files from server disk.")
+                }
+                if (args.isNotEmpty()) {
+                    var text = Context.toString(args[0])
+                    if (text === null || text.isEmpty()) {
+                        throw JSBotException("Invalid filename")
+                    }
+                    val file = File(text)
+                    if (!file.exists() || !file.isFile) {
+                        throw JSBotException("File not found or not a file")
+                    }
+
+                    return file.readText()
+                } else {
+                    throw JSBotException("Missing argument")
+                }
+            }
+
+            override fun getArity(): Int {
+                return 1
+            }
+        })
+    }
+
+    private fun addMessageDependentStuff(cx: Context, to: Scriptable, bot: JSBot, message: Message) {
 
         val chatID = message.chatId
-        val userId = message.from.id
-        //defines native "message" function
 
         var remaining = 10
 
         //adds the message function to the scope
+        //defines native "message" function
         ScriptableObject.putProperty(to, "message", object : BaseFunction() {
 
             override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<Any>): Any? {
@@ -358,9 +489,9 @@ class JSBot(
             override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<Any>): Any? {
                 if (args.isNotEmpty() && remaining > 0) {
                     val argument = args[0]
-                    if(argument is Scriptable){
+                    if (argument is Scriptable) {
                         val media = SimpleMedia.fromJS(argument)
-                        if(media !== null) {
+                        if (media !== null) {
                             SimpleMedia.send(media, chatID, bot)
                             --remaining
                         }
@@ -376,12 +507,9 @@ class JSBot(
             }
         })
 
-        //adds the "me" dynamic reference
-        ScriptableObject.putProperty(to, "my", scopemap[userId.toLong()] ?: Undefined.instance)
-
 
         //adds the media in the message the user is referring to (or null if not present)
-        val referredMedia =  SimpleMedia.fromMessage(message.replyToMessage)?.toJS(cx, to)
+        val referredMedia = SimpleMedia.fromMessage(message.replyToMessage)?.toJS(cx, to)
         ScriptableObject.putProperty(to, "refMedia", referredMedia)
 
 
@@ -394,97 +522,28 @@ class JSBot(
             }
         ScriptableObject.putProperty(to, "refText", referredText)
 
-        if(referredMedia!==null){
+        if (referredMedia !== null) {
             ScriptableObject.putProperty(to, "that", referredMedia)
-        }else{
+        } else {
             ScriptableObject.putProperty(to, "that", referredText)
         }
-
-        val retrievedRole = retrieveRoleFromUser(message.from)
-        ScriptableObject.putProperty(to, "role", retrievedRole.getRoleName())
-
-        if(retrieveRoleFromUser(message.from).isAuthorized(Role.JAVA_ABILITY)) {
-            ScriptableObject.putProperty(to, "java", cx.initStandardObjects())
-        }else{
-            ScriptableObject.putProperty(to, "java", null)
-        }
-
-
-        var remainingRole = 1
-        ScriptableObject.putProperty(to, "setRole", object:BaseFunction(){
-            override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<Any>): Any? {
-                if(!retrieveRoleFromUser(message.from).isAuthorized(Role.SET_ROLES_ABILITY)){
-                    throw JSBotException("Not authorized to set role.")
-                }
-                if (args.size == 2 && remainingRole > 0) {
-                    val argumentRole = args[1]
-                    if(argumentRole is String){
-                        val createdRole = Role.create(argumentRole)
-
-                        if(createdRole===null){
-                            return false
-                        }
-
-                        val argumentUN = args[0]
-                        if(argumentUN is String){
-                            if(argumentUN == creator){
-                                throw JSBotException("Creator's role is immutable.")
-                            }
-                            val id = usernamesMap[argumentUN]
-                            if (id !== null) {
-                                remainingRole--
-                                userRoles[id] = createdRole
-                                saveUserRoles()
-                                return true
-                            }
-
-                            return false
-                        }else if(argumentUN is Int){
-                            if(argumentUN == creatorId){
-                                throw JSBotException("Creator's role is immutable.")
-                            }
-                            remainingRole--
-                            userRoles[argumentUN] = createdRole
-                            saveUserRoles()
-                            return true
-                        }
-                    }
-
-                } else if (remainingRole <= 0) {
-                    throw JSBotException("Operation limit reached.")
-                }
-                return Undefined.instance
-            }
-
-            override fun getArity(): Int {
-                return 2
-            }
-        })
-
-
-        val abilityList = mutableListOf<Any>()
-        retrievedRole.getAbilites().forEach{
-            abilityList.add(it)
-        }
-        ScriptableObject.putProperty(to, "abilities", cx.newArray(to, abilityList.toTypedArray()))
 
     }
 
 
-
     private fun scopeFileName(chatId: Long) = "scope$chatId.js"
 
-    private fun saveScope(chatId:Long, context: Context, saved:Scriptable){
+    private fun saveScope(chatId: Long, context: Context, saved: Scriptable) {
         val filename = scopeFileName(chatId)
         println("Saving Scope $filename")
 
-        PrintWriter(FileOutputStream(filename)).use{
+        PrintWriter(FileOutputStream(filename)).use {
             val source = serialize(context, saved)
             it.println(source)
         }
     }
 
-    private fun serialize(context: Context, theObject: Scriptable) :String{
+    private fun serialize(context: Context, theObject: Scriptable): String {
         val result = context.evaluateString(
             theObject,
             "toSource()",
@@ -496,10 +555,10 @@ class JSBot(
     }
 
 
-    private fun loadScope(chatId:Long, context: Context, saved:Scriptable): Any{
+    private fun loadScope(chatId: Long, context: Context, saved: Scriptable): Any {
         val filename = scopeFileName(chatId)
         val file = File(filename)
-        if(file.exists() && file.isFile) {
+        if (file.exists() && file.isFile) {
             val fis = FileInputStream(file)
             fis.bufferedReader().use {
                 val result = context.evaluateReader(saved, it, "<load>", 1, null)

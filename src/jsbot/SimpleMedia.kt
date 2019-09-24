@@ -5,6 +5,11 @@ import org.mozilla.javascript.Scriptable
 import org.mozilla.javascript.ScriptableObject
 import org.telegram.telegrambots.meta.api.methods.send.*
 import org.telegram.telegrambots.meta.api.objects.Message
+import org.telegram.telegrambots.meta.exceptions.TelegramApiException
+import org.telegram.telegrambots.meta.api.methods.GetFile
+import org.telegram.telegrambots.meta.api.objects.PhotoSize
+
+
 
 /**
  * Created on 22/09/2019.
@@ -18,6 +23,14 @@ class SimpleMedia(var mediaType:String, var fileID:String) {
         ScriptableObject.putProperty(result, "fileID", fileID)
         return result
     }
+
+
+    fun getFilePath(bot:JSBot) = bot.execute(GetFile().setFileId(fileID)).filePath
+
+    fun getFileSize(bot:JSBot) = bot.execute(GetFile().setFileId(fileID)).fileSize
+
+    fun downloadByFilePath(bot:JSBot, filePath: String) = bot.downloadFile(filePath)
+
 
     companion object {
         val ANIMATION = "ANIMATION"

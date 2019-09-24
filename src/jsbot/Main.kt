@@ -64,6 +64,7 @@ fun main(args: Array<String>) {
 
         val botsApi = TelegramBotsApi()
         try {
+
             val jsbot = JSBot(
                 creator,
                 creatorId,
@@ -75,10 +76,12 @@ fun main(args: Array<String>) {
             )
             jsbot.loadUsernames()
             jsbot.loadUserRoles()
+
             botsApi.registerBot(jsbot)
         } catch (e: TelegramApiException) {
             e.printStackTrace()
         }
+
     }
 
 
