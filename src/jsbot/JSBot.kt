@@ -84,6 +84,17 @@ class JSBot(
                                 saveScope(message.chatId, it, saved)
                             }
 
+                            if (!message.isUserMessage) {
+                                val userSaved = retrieveScope(it, message.from.id.toLong())?.get("saved", scope)
+                                if (userSaved !== null
+                                    && userSaved != Scriptable.NOT_FOUND
+                                    && userSaved != Context.getUndefinedValue()
+                                    && userSaved is ScriptableObject
+                                ) {
+                                    saveScope(message.from.id.toLong(), it, userSaved)
+                                }
+                            }
+
                             saveUsernameMap()
                             saveUserRoles()
 
@@ -453,12 +464,12 @@ class JSBot(
         })
 
         val bot = this
-        ScriptableObject.putProperty(to, "getUser", object : BaseFunction(){
+        ScriptableObject.putProperty(to, "getUser", object : BaseFunction() {
             override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<out Any>): Any? {
-                if(!retrieveRoleFromId(userId).isAuthorized(Role.USER_DATABASE_READ_ABILITY)){
+                if (!retrieveRoleFromId(userId).isAuthorized(Role.USER_DATABASE_READ_ABILITY)) {
                     throw JSBotException("Not authorized to read users database.")
                 }
-                if(args.isNotEmpty()){
+                if (args.isNotEmpty()) {
                     val argument = args[0]
                     return when (argument) {
                         is String -> {
@@ -471,7 +482,7 @@ class JSBot(
                         is Int -> jsbot.User(argument).toJS(cx, to, bot)
                         else -> null
                     }
-                }else{
+                } else {
                     throw JSBotException("Missing argument")
                 }
             }
