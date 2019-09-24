@@ -121,7 +121,7 @@ class JSBot(
             }
         }
         println("loaded usernames, size:${usernamesMap.size}")
-        usernamesMap.forEach{(name, id)->
+        usernamesMap.forEach { (name, id) ->
             println("$name:$id")
         }
     }
@@ -150,12 +150,10 @@ class JSBot(
             }
         }
         println("loaded user roles, size:${userRoles.size}")
-        userRoles.forEach{(name, role)->
+        userRoles.forEach { (name, role) ->
             println("$name:${role.getRoleName()}")
         }
     }
-
-
 
 
     private fun retrieveRoleFromUserName(username: String): Role? {
@@ -208,6 +206,9 @@ class JSBot(
 
                         if (text.startsWith("SEPPUKU")) {
                             if (retrieveRoleFromUser(message.from).isAuthorized(Role.PANIC_ABILITY)) {
+
+                                execute(SendMessage(message.chatId, "cout << \"Sto morendo!\";"))
+
                                 exitProcess(2) //HARAKIRIIIII
                             }
                         }
@@ -280,7 +281,7 @@ class JSBot(
     }
 
 
-    private fun retrieveScope(cx: Context, scopeID: Long, message: Message? = null): Scriptable? {
+    fun retrieveScope(cx: Context, scopeID: Long, message: Message? = null): Scriptable? {
 
         println("retrieving scope :$scopeID")
         val result = if (scopemap.containsKey(scopeID)) {
@@ -311,13 +312,14 @@ class JSBot(
         }
 
         if (result != null) {
-            if(message!==null) {
+
+            if (message !== null) {
                 println("retrieving scope :$scopeID ---: adding message-dependent properties")
                 addMessageDependentStuff(cx, result, this, message)
                 println("retrieving scope :$scopeID ---: adding user-dependent properties, user: ${message.from.id}")
                 addUserStuff(cx, result, message.from.id)
-            }else{
-                if(scopeID>0){
+            } else {
+                if (scopeID > 0) {
                     println("retrieving scope :$scopeID ---: adding user-dependent properties (user chat)")
                     addUserStuff(cx, result, scopeID.toInt())
                 }
@@ -336,10 +338,11 @@ class JSBot(
         return result
     }
 
+
     private fun addUserStuff(cx: Context, to: Scriptable, userId: Int) {
 
         //adds the "me" dynamic reference
-        ScriptableObject.putProperty(to, "my", scopemap[userId.toLong()]?:retrieveScope(cx, userId.toLong()))
+        ScriptableObject.putProperty(to, "my", scopemap[userId.toLong()] ?: retrieveScope(cx, userId.toLong()))
 
 
         val retrievedRole = retrieveRoleFromId(userId)
@@ -392,7 +395,7 @@ class JSBot(
                             }
 
                             return false
-                        } else if (argumentUN is Integer) {
+                        } else if (argumentUN is Int) {
                             if (argumentUN == creatorId) {
                                 throw JSBotException("Creator's role is immutable.")
                             }
@@ -414,7 +417,6 @@ class JSBot(
                 return 2
             }
         })
-
 
 
         val abilityList = mutableListOf<Any>()
@@ -447,6 +449,31 @@ class JSBot(
 
             override fun getArity(): Int {
                 return 1
+            }
+        })
+
+        val bot = this
+        ScriptableObject.putProperty(to, "getUser", object : BaseFunction(){
+            override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<out Any>): Any? {
+                if(!retrieveRoleFromId(userId).isAuthorized(Role.USER_DATABASE_READ_ABILITY)){
+                    throw JSBotException("Not authorized to read users database.")
+                }
+                if(args.isNotEmpty()){
+                    val argument = args[0]
+                    return when (argument) {
+                        is String -> {
+                            val id = usernamesMap[argument]
+                            when {
+                                id !== null -> jsbot.User(id, argument).toJS(cx, to, bot)
+                                else -> null
+                            }
+                        }
+                        is Int -> jsbot.User(argument).toJS(cx, to, bot)
+                        else -> null
+                    }
+                }else{
+                    throw JSBotException("Missing argument")
+                }
             }
         })
     }
@@ -528,6 +555,18 @@ class JSBot(
             ScriptableObject.putProperty(to, "that", referredText)
         }
 
+        ScriptableObject.putProperty(
+            to,
+            "me",
+            jsbot.User.fromTgUser(message.from)?.toJS(cx, to, this)
+        )
+
+        ScriptableObject.putProperty(
+            to,
+            "thatUser",
+            jsbot.User.fromTgUser(message.replyToMessage?.from)?.toJS(cx, to, this)
+        )
+
     }
 
 
@@ -586,8 +625,6 @@ construct for portions of code with specific contexts.
             Context.exit()
         }
     }
-
-
 
 
     class JSBotException(message: String) : RuntimeException(message)

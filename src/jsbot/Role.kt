@@ -29,6 +29,7 @@ interface Role {
         const val JAVA_ABILITY = "JAVA_ABILITY"
         const val BOT_ACCESS_ABILITY = "BOT_ACCESS_ABILITY"
         const val LOAD_FILE_ABILITY = "LOAD_FILE_ABILITY"
+        const val USER_DATABASE_READ_ABILITY = "USER_DATABASE_READ_ABILITY"
 
 
         fun create(roletype: String) = when (roletype) {
@@ -52,22 +53,31 @@ interface Role {
 
         open class GroupUser : Role {
             override fun getRoleName() = GROUP_USER_ROLE
-            override fun getAbilites() = setOf(GROUP_USE_BOT_ABILITY)
+            override fun getAbilites() = setOf(
+                GROUP_USE_BOT_ABILITY
+            )
         }
 
         open class User : GroupUser() {
             override fun getRoleName() = USER_ROLE
-            override fun getAbilites() = super.getAbilites() + setOf(PRIVATE_USE_BOT_ABILITY)
+            override fun getAbilites() = super.getAbilites() + setOf(
+                PRIVATE_USE_BOT_ABILITY
+            )
         }
 
         open class Moderator : User() {
             override fun getRoleName() = MODERATOR_ROLE
-            override fun getAbilites() = super.getAbilites() + setOf(PANIC_ABILITY)
+            override fun getAbilites() = super.getAbilites() + setOf(
+                PANIC_ABILITY,
+                USER_DATABASE_READ_ABILITY
+            )
         }
 
         open class Admin : Moderator() {
             override fun getRoleName() = ADMIN_ROLE
-            override fun getAbilites() = super.getAbilites() + setOf(SET_ROLES_ABILITY)
+            override fun getAbilites() = super.getAbilites() + setOf(
+                SET_ROLES_ABILITY
+            )
         }
 
         open class SuperAdmin : Admin() {
