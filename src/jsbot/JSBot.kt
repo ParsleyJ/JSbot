@@ -224,6 +224,8 @@ class JSBot(
                             }
                         }
 
+
+
                         val showError = text.startsWith("JS ")
                         var command = text
                         try {
@@ -328,7 +330,7 @@ class JSBot(
                 println("retrieving scope :$scopeID ---: adding message-dependent properties")
                 addMessageDependentStuff(cx, result, this, message)
                 println("retrieving scope :$scopeID ---: adding user-dependent properties, user: ${message.from.id}")
-                addUserStuff(cx, result, message.from.id)
+                addUserStuff(cx, result, message.from.id, message)
             } else {
                 if (scopeID > 0) {
                     println("retrieving scope :$scopeID ---: adding user-dependent properties (user chat)")
@@ -350,7 +352,7 @@ class JSBot(
     }
 
 
-    private fun addUserStuff(cx: Context, to: Scriptable, userId: Int) {
+    private fun addUserStuff(cx: Context, to: Scriptable, userId: Int, jobMessage: Message? = null) {
 
         //adds the "me" dynamic reference
         ScriptableObject.putProperty(to, "my", scopemap[userId.toLong()] ?: retrieveScope(cx, userId.toLong()))
@@ -493,11 +495,11 @@ class JSBot(
                         is String -> {
                             val id = usernamesMap[argument]
                             when {
-                                id !== null -> jsbot.User(id, argument).toJS(cx, to, bot)
+                                id !== null -> jsbot.User(id, argument).toJS(cx, to, bot, jobMessage)
                                 else -> null
                             }
                         }
-                        is Int -> jsbot.User(argument).toJS(cx, to, bot)
+                        is Int -> jsbot.User(argument).toJS(cx, to, bot, jobMessage)
                         else -> null
                     }
                 } else {
@@ -587,13 +589,13 @@ class JSBot(
         ScriptableObject.putProperty(
             to,
             "me",
-            jsbot.User.fromTgUser(message.from)?.toJS(cx, to, this)
+            jsbot.User.fromTgUser(message.from)?.toJS(cx, to, this, message)
         )
 
         ScriptableObject.putProperty(
             to,
             "thatUser",
-            jsbot.User.fromTgUser(message.replyToMessage?.from)?.toJS(cx, to, this)
+            jsbot.User.fromTgUser(message.replyToMessage?.from)?.toJS(cx, to, this, message)
         )
 
     }

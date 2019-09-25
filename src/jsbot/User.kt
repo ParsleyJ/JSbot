@@ -2,13 +2,14 @@ package jsbot
 
 import org.mozilla.javascript.*
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
+import org.telegram.telegrambots.meta.api.objects.Message
 
 /**
  * Created on 24/09/2019.
  *
  */
 class User(val id: Int, var userName: String? = null) {
-    fun toJS(cx: Context, scope: Scriptable, bot: JSBot): Scriptable? {
+    fun toJS(cx: Context, scope: Scriptable, bot: JSBot, jobMessage: Message? = null): Scriptable? {
         val to = cx.newObject(scope)
         ScriptableObject.putProperty(to, "id", id)
         ScriptableObject.putProperty(to, "username", userName)
@@ -53,63 +54,73 @@ class User(val id: Int, var userName: String? = null) {
 
         var remaining = 10
 
-        ScriptableObject.putProperty(to, "message", object : BaseFunction() {
+        if(jobMessage!==null) {
+            ScriptableObject.putProperty(to, "message", object : BaseFunction() {
 
-            override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<Any>): Any? {
-                if(!bot.retrieveRoleFromId(id).isAuthorized(Role.PRIVATE_MESSAGING_ABILITY)){
-                    throw JSBot.JSBotException("Not authorized to send private messages.")
-                }
-                if (args.isNotEmpty() && remaining > 0) {
-                    var text = Context.toString(args[0])
-                    text = if (text === null || text.isEmpty()) "_" else text
-                    bot.execute(
-                        SendMessage()
-                            .setChatId(id.toLong())
-                            .setText("From: "+(userName?:id) + "\n" + text)
-                            .disableNotification()
-                    )
-                    --remaining
-                } else if (remaining <= 0) {
-                    throw JSBot.JSBotException("Message limit reached.")
-                }
-                return Undefined.instance
-            }
-
-            override fun getArity(): Int {
-                return 1
-            }
-        })
-
-        ScriptableObject.putProperty(to, "sendMedia", object : BaseFunction() {
-
-            override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<Any>): Any? {
-                if(!bot.retrieveRoleFromId(id).isAuthorized(Role.PRIVATE_MESSAGING_ABILITY)){
-                    throw JSBot.JSBotException("Not authorized to send private messages.")
-                }
-                if (args.isNotEmpty() && remaining > 0) {
-                    val argument = args[0]
-                    if (argument is Scriptable) {
-                        val media = SimpleMedia.fromJS(argument)
-                        if (media !== null) {
-                            SimpleMedia.send(
-                                media,
-                                id.toLong(),
-                                bot,
-                                "From: "+(userName?:id)
-                            )
-                            --remaining
-                        }
+                override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<Any>): Any? {
+                    if (!bot.retrieveRoleFromId(id).isAuthorized(Role.PRIVATE_MESSAGING_ABILITY)) {
+                        throw JSBot.JSBotException("Not authorized to send private messages.")
                     }
-                } else if (remaining <= 0) {
-                    throw JSBot.JSBotException("Message limit reached.")
+                    if (args.isNotEmpty() && remaining > 0) {
+                        var text = Context.toString(args[0])
+                        text = if (text === null || text.isEmpty()) "_" else text
+                        bot.execute(
+                            SendMessage()
+                                .setChatId(id.toLong())
+                                .setText("From: " + (jobMessage.from.userName ?: jobMessage.from.id) + "\n" + text)
+                        )
+                        --remaining
+                    } else if (remaining <= 0) {
+                        throw JSBot.JSBotException("Message limit reached.")
+                    }
+                    return Undefined.instance
                 }
-                return Undefined.instance
-            }
 
-            override fun getArity(): Int {
-                return 1
-            }
-        })
+                override fun getArity(): Int {
+                    return 1
+                }
+            })
+
+            ScriptableObject.putProperty(to, "sendMedia", object : BaseFunction() {
+
+                override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<Any>): Any? {
+                    if(!bot.retrieveRoleFromId(id).isAuthorized(Role.PRIVATE_MESSAGING_ABILITY)){
+                        throw JSBot.JSBotException("Not authorized to send private messages.")
+                    }
+                    if (args.isNotEmpty() && remaining > 0) {
+                        val argument = args[0]
+                        if (argument is Scriptable) {
+                            val media = SimpleMedia.fromJS(argument)
+                            if (media !== null) {
+                                bot.execute(SendMessage()
+                                    .setChatId(id.toLong())
+                                    .setText("From: " + (jobMessage.from.userName ?: jobMessage.from.id))
+                                )
+                                SimpleMedia.send(
+                                    media,
+                                    id.toLong(),
+                                    bot
+                                )
+                                --remaining
+                                --remaining
+                            }
+                        }
+                    } else if (remaining <= 0) {
+                        throw JSBot.JSBotException("Message limit reached.")
+                    }
+                    return Undefined.instance
+                }
+
+                override fun getArity(): Int {
+                    return 1
+                }
+            })
+        }else{
+            ScriptableObject.putProperty(to, "message", null)
+            ScriptableObject.putProperty(to, "sendMedia", null)
+        }
+
+
 
 
         return to
