@@ -221,17 +221,22 @@ class JSBot(
                                 execute(SendMessage(message.chatId, "cout << \"Sto morendo!\";"))
 
                                 exitProcess(2) //HARAKIRIIIII
+
                             }
                         }
 
-
-
-                        val showError = text.startsWith("JS ")
-                        var command = text
                         try {
-                            val result: Any? = if (showError) {
-                                try {
-                                    command = text.substring(3)
+                            if (text == "JS!"
+                                && message.replyToMessage !== null
+                                && message.replyToMessage.hasText()
+                                && message.replyToMessage.text !== null
+                                && message.from.id == message.replyToMessage.from.id
+                            ) {
+                                val result: Any? = try {
+                                    var command = message.replyToMessage.text
+                                    if (command.startsWith("JS ")) {
+                                        command = command.substring(3)
+                                    }
                                     it2.evaluateString(scope, command, "<cmd>", 1, null)
                                 } catch (e: RhinoException) {
                                     println(e.message)
@@ -240,21 +245,49 @@ class JSBot(
                                     println(e.message)
                                     e.message
                                 }
-                            } else {
-                                it2.evaluateString(scope, command, "<cmd>", 1, null)
-                            }
 
-                            if (result is Scriptable) {
-                                val media = SimpleMedia.fromJS(result)
-                                if (media !== null) {
-                                    replyWithSimpleMedia(media, message)
+                                if (result is Scriptable) {
+                                    val media = SimpleMedia.fromJS(result)
+                                    if (media !== null) {
+                                        replyWithSimpleMedia(media, message)
+                                    } else {
+                                        replyWithText(result, message)
+                                    }
                                 } else {
                                     replyWithText(result, message)
                                 }
                             } else {
-                                replyWithText(result, message)
-                            }
 
+                                val showError = text.startsWith("JS ")
+                                var command = text
+
+                                val result: Any? = if (showError) {
+                                    try {
+                                        command = text.substring(3)
+                                        it2.evaluateString(scope, command, "<cmd>", 1, null)
+                                    } catch (e: RhinoException) {
+                                        println(e.message)
+                                        e.message
+                                    } catch (e: JSBotException) {
+                                        println(e.message)
+                                        e.message
+                                    }
+                                } else {
+                                    it2.evaluateString(scope, command, "<cmd>", 1, null)
+                                }
+
+                                if (result is Scriptable) {
+                                    val media = SimpleMedia.fromJS(result)
+                                    if (media !== null) {
+                                        replyWithSimpleMedia(media, message)
+                                    } else {
+                                        replyWithText(result, message)
+                                    }
+                                } else {
+                                    replyWithText(result, message)
+                                }
+
+                            }
                         } catch (e: TelegramApiException) {
                             e.printStackTrace()
                         } catch (e: RhinoException) {
@@ -417,9 +450,9 @@ class JSBot(
                             userRoles[argUser.toInt()] = createdRole
                             saveUserRoles()
                             return true
-                        } else if (argUser is Scriptable){
+                        } else if (argUser is Scriptable) {
                             val fromJS = jsbot.User.fromJS(argUser)
-                            if(fromJS!==null){
+                            if (fromJS !== null) {
                                 if (fromJS.id == creatorId) {
                                     throw JSBotException("Creator's role is immutable.")
                                 }
@@ -427,13 +460,13 @@ class JSBot(
                                 userRoles[fromJS.id] = createdRole
                                 saveUserRoles()
                                 return true
-                            }else{
+                            } else {
                                 throw JSBotException("Illegal target user argument.")
                             }
                         } else {
                             throw JSBotException("Illegal target user argument.")
                         }
-                    }else{
+                    } else {
                         throw JSBotException("Illegal role argument.")
                     }
 
