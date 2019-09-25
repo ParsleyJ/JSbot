@@ -65,12 +65,16 @@ class SimpleMedia(var mediaType:String, var fileID:String) {
             }
         }
 
-        fun send(media: SimpleMedia?, chatID:Long, bot:JSBot){
+        fun send(media: SimpleMedia?, chatID:Long, bot:JSBot, withText: String? = null){
             if(media == null){
-                bot.execute(SendMessage()
+                val send = SendMessage()
                     .setText("null")
                     .setChatId(chatID)
-                    .disableNotification())
+                    .disableNotification()
+                if(withText!==null){
+                    send.text = withText
+                }
+                bot.execute(send)
                 return
             }
             val fileID = media.fileID

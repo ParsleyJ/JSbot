@@ -167,7 +167,7 @@ class JSBot(
     }
 
 
-    private fun retrieveRoleFromUserName(username: String): Role? {
+    fun retrieveRoleFromUserName(username: String): Role? {
         val userid = usernamesMap[username]
         return if (userid !== null) {
             retrieveRoleFromId(userid)
@@ -176,7 +176,7 @@ class JSBot(
         }
     }
 
-    private fun retrieveRoleFromId(userid: Int): Role {
+    fun retrieveRoleFromId(userid: Int): Role {
         var role = userRoles[userid]
         if (role === null) {
             role = Role.create(defaultRole)!!
@@ -185,7 +185,7 @@ class JSBot(
         return role
     }
 
-    private fun retrieveRoleFromUser(user: User): Role {
+    fun retrieveRoleFromUser(user: User): Role {
         val fromUN = user.userName
         val fromID = user.id
         return if (fromUN !== null && usernamesMap.containsKey(fromUN)) {
@@ -383,7 +383,8 @@ class JSBot(
                 if (!retrieveRoleFromId(userId).isAuthorized(Role.SET_ROLES_ABILITY)) {
                     throw JSBotException("Not authorized to set role.")
                 }
-                if (args.size == 2 && remainingRole > 0) {
+
+                if (args.size >= 2 && remainingRole > 0) {
                     val argumentRole = args[1]
                     if (argumentRole is String) {
                         val createdRole = Role.create(argumentRole)
@@ -392,12 +393,12 @@ class JSBot(
                             return false
                         }
 
-                        val argumentUN = args[0]
-                        if (argumentUN is String) {
-                            if (argumentUN == creator) {
+                        val argUser = args[0]
+                        if (argUser is String) {
+                            if (argUser == creator) {
                                 throw JSBotException("Creator's role is immutable.")
                             }
-                            val id = usernamesMap[argumentUN]
+                            val id = usernamesMap[argUser]
                             if (id !== null) {
                                 remainingRole--
                                 userRoles[id] = createdRole
@@ -405,18 +406,35 @@ class JSBot(
                                 return true
                             }
 
-                            return false
-                        } else if (argumentUN is Int) {
-                            if (argumentUN == creatorId) {
+                            throw JSBotException("Illegal target user argument.")
+                        } else if (argUser is Int) {
+                            if (argUser == creatorId) {
                                 throw JSBotException("Creator's role is immutable.")
                             }
                             remainingRole--
-                            userRoles[argumentUN.toInt()] = createdRole
+                            userRoles[argUser.toInt()] = createdRole
                             saveUserRoles()
                             return true
+                        } else if (argUser is Scriptable){
+                            val fromJS = jsbot.User.fromJS(argUser)
+                            if(fromJS!==null){
+                                if (fromJS.id == creatorId) {
+                                    throw JSBotException("Creator's role is immutable.")
+                                }
+                                remainingRole--
+                                userRoles[fromJS.id] = createdRole
+                                saveUserRoles()
+                                return true
+                            }else{
+                                throw JSBotException("Illegal target user argument.")
+                            }
+                        } else {
+                            throw JSBotException("Illegal target user argument.")
                         }
+                    }else{
+                        throw JSBotException("Illegal role argument.")
                     }
-                    return false
+
 
                 } else if (remainingRole <= 0) {
                     throw JSBotException("Operation limit reached.")

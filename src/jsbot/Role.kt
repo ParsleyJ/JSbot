@@ -30,7 +30,7 @@ interface Role {
         const val BOT_ACCESS_ABILITY = "BOT_ACCESS_ABILITY"
         const val LOAD_FILE_ABILITY = "LOAD_FILE_ABILITY"
         const val USER_DATABASE_READ_ABILITY = "USER_DATABASE_READ_ABILITY"
-
+        const val PRIVATE_MESSAGING_ABILITY = "PRIVATE_MESSAGING_ABILITY"
 
         fun create(roletype: String) = when (roletype) {
             NOT_AUTHORIZED_ROLE -> NotAuthorized()
@@ -69,7 +69,8 @@ interface Role {
             override fun getRoleName() = MODERATOR_ROLE
             override fun getAbilites() = super.getAbilites() + setOf(
                 PANIC_ABILITY,
-                USER_DATABASE_READ_ABILITY
+                USER_DATABASE_READ_ABILITY,
+                PRIVATE_MESSAGING_ABILITY
             )
         }
 
