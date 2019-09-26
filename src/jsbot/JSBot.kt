@@ -1,5 +1,6 @@
 package jsbot
 
+import org.json.JSONObject
 import org.mozilla.javascript.*
 import org.telegram.telegrambots.bots.TelegramLongPollingBot
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
@@ -238,10 +239,7 @@ class JSBot(
                                         command = command.substring(3)
                                     }
                                     it2.evaluateString(scope, command, "<cmd>", 1, null)
-                                } catch (e: RhinoException) {
-                                    println(e.message)
-                                    e.message
-                                } catch (e: JSBotException) {
+                                } catch (e: Throwable) {
                                     println(e.message)
                                     e.message
                                 }
@@ -265,10 +263,7 @@ class JSBot(
                                     try {
                                         command = text.substring(3)
                                         it2.evaluateString(scope, command, "<cmd>", 1, null)
-                                    } catch (e: RhinoException) {
-                                        println(e.message)
-                                        e.message
-                                    } catch (e: JSBotException) {
+                                    } catch (e: Throwable) {
                                         println(e.message)
                                         e.message
                                     }
@@ -288,12 +283,12 @@ class JSBot(
                                 }
 
                             }
-                        } catch (e: TelegramApiException) {
-                            e.printStackTrace()
                         } catch (e: RhinoException) {
                             println(e.message)
                         } catch (e: JSBotException) {
                             println(e.message)
+                        } catch (e: Throwable) {
+                            e.printStackTrace()
                         }
                         println("Ended Job.")
                     }
@@ -496,7 +491,7 @@ class JSBot(
                     throw JSBotException("Not authorized to load files from server disk.")
                 }
                 if (args.isNotEmpty()) {
-                    var text = Context.toString(args[0])
+                    val text = Context.toString(args[0])
                     if (text === null || text.isEmpty()) {
                         throw JSBotException("Invalid filename")
                     }
@@ -539,7 +534,27 @@ class JSBot(
                     throw JSBotException("Missing argument")
                 }
             }
+
+            override fun getArity(): Int {
+                return 1
+            }
         })
+
+        if(Emoji.isEmojiLoaded()) {
+            ScriptableObject.putProperty(to, "findEmoji", object : BaseFunction() {
+                override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<out Any>): Any? {
+                    if (args.isNotEmpty()) {
+                        val argument = args[0]
+                        return when (argument) {
+                            is String -> Emoji.findEmoji(argument).toScriptable(cx, scope)
+                            else -> null
+                        }
+                    } else {
+                        throw JSBotException("Missing argument")
+                    }
+                }
+            })
+        }
     }
 
     private fun addMessageDependentStuff(cx: Context, to: Scriptable, bot: JSBot, message: Message) {
@@ -696,4 +711,14 @@ construct for portions of code with specific contexts.
 
 }
 
+fun List<String>.toScriptable(cx:Context, scope: Scriptable): Any {
+    return cx.newArray(scope, this.map { Context.javaToJS(it, scope) }.toTypedArray())
+}
+
+fun JSONObject.toScriptable(cx: Context, scope: Scriptable) : Any {
+    return cx.evaluateString(scope, "(${this})", "toScriptable", 1, null)
+}
+fun String.toScriptable(cx: Context, scope: Scriptable) : Any {
+    return cx.evaluateString(scope, "\"${this}\"", "toScriptable", 1, null)
+}
 

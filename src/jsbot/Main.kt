@@ -1,5 +1,7 @@
 package jsbot
 
+import org.json.JSONObject
+import org.json.JSONTokener
 import org.mozilla.javascript.*
 import org.telegram.telegrambots.ApiContextInitializer
 import org.telegram.telegrambots.meta.TelegramBotsApi
@@ -14,7 +16,16 @@ import java.util.*
  */
 
 
+
 fun main(args: Array<String>) {
+
+
+
+
+
+
+
+
 
     val propFile: File
 
@@ -31,6 +42,7 @@ fun main(args: Array<String>) {
             return
         }
         println("Working Directory = ${System.getProperty("user.dir")}")
+
     } else {
         propFile = File(args[0])
         if (!propFile.exists() || !propFile.isFile) {
@@ -39,8 +51,18 @@ fun main(args: Array<String>) {
         }
     }
 
+    val propertyFileDirectory = propFile.parent
     println("Properties file = ${propFile.absolutePath}")
+    println("Directory of property file = $propertyFileDirectory")
+    Emoji.loadEmojis("$propertyFileDirectory/emojis.json")
 
+    if(Emoji.isEmojiLoaded()) {
+        Emoji.findEmoji("rofl").forEach {
+            println(" $it emojis loaded $it ")
+        }
+    }else{
+        println("Could not load emojis.")
+    }
     FileInputStream(propFile).use { input ->
         val properties = Properties()
         properties.load(input)
