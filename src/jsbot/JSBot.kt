@@ -7,7 +7,6 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.objects.Message
 import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.api.objects.User
-import org.telegram.telegrambots.meta.exceptions.TelegramApiException
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -27,7 +26,7 @@ class JSBot(
 
 
     companion object {
-        const val defaultRole = Role.USER_ROLE
+        const val defaultRole = Role.NOT_AUTHORIZED_ROLE
     }
 
 
@@ -410,7 +409,8 @@ class JSBot(
         var remainingRole = 1
         ScriptableObject.putProperty(to, "setRole", object : BaseFunction() {
             override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<Any>): Any? {
-                if (!retrieveRoleFromId(userId).isAuthorized(Role.SET_ROLES_ABILITY)) {
+
+                if (!retrievedRole.isAuthorized(Role.SET_ROLES_ABILITY)) {
                     throw JSBotException("Not authorized to set role.")
                 }
 
@@ -431,9 +431,16 @@ class JSBot(
                             val id = usernamesMap[argUser]
                             if (id !== null) {
                                 remainingRole--
-                                userRoles[id] = createdRole
-                                saveUserRoles()
-                                return true
+                                if(retrievedRole.isChangeRoleAuthorized(
+                                        userRoles[id]?: Role.create(defaultRole)!!,
+                                        createdRole
+                                    )){
+                                    userRoles[id] = createdRole
+                                    saveUserRoles()
+                                    return true
+                                }else{
+                                    throw JSBotException("Unsufficient privileges.")
+                                }
                             }
 
                             throw JSBotException("Illegal target user argument.")
@@ -442,19 +449,32 @@ class JSBot(
                                 throw JSBotException("Creator's role is immutable.")
                             }
                             remainingRole--
-                            userRoles[argUser.toInt()] = createdRole
-                            saveUserRoles()
-                            return true
+                            if(retrievedRole.isChangeRoleAuthorized(
+                                    userRoles[argUser.toInt()]?: Role.create(defaultRole)!!,
+                                    createdRole
+                                )){
+                                userRoles[argUser.toInt()] = createdRole
+                                saveUserRoles()
+                                return true
+                            }else{
+                                throw JSBotException("Unsufficient privileges.")
+                            }
                         } else if (argUser is Scriptable) {
                             val fromJS = jsbot.User.fromJS(argUser)
                             if (fromJS !== null) {
                                 if (fromJS.id == creatorId) {
                                     throw JSBotException("Creator's role is immutable.")
                                 }
-                                remainingRole--
-                                userRoles[fromJS.id] = createdRole
-                                saveUserRoles()
-                                return true
+                                if(retrievedRole.isChangeRoleAuthorized(
+                                        userRoles[fromJS.id]?: Role.create(defaultRole)!!,
+                                        createdRole
+                                    )){
+                                    userRoles[fromJS.id] = createdRole
+                                    saveUserRoles()
+                                    return true
+                                }else{
+                                    throw JSBotException("Unsufficient privileges.")
+                                }
                             } else {
                                 throw JSBotException("Illegal target user argument.")
                             }
@@ -485,7 +505,7 @@ class JSBot(
         ScriptableObject.putProperty(to, "abilities", cx.newArray(to, abilityList.toTypedArray()))
 
 
-        ScriptableObject.putProperty(to, "readFile", object : BaseFunction() {
+        ScriptableObject.putProperty(to, "readFileFS", object : BaseFunction() {
             override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<Any>): Any? {
                 if (!retrieveRoleFromId(userId).isAuthorized(Role.LOAD_FILE_ABILITY)) {
                     throw JSBotException("Not authorized to load files from server disk.")
@@ -613,6 +633,63 @@ class JSBot(
             }
         })
 
+        val toFile = object:BaseFunction(){
+            override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<out Any>): Any? {
+                if(args.isEmpty() || args.size > 2){
+                    throw JSBotException("Wrong number of arguments")
+                }else{
+                    val name = if(args.size == 1){
+                        "file"
+                    }else when (args[1]){
+                        is String -> args[1] as String
+                        else -> "file"
+                    }
+
+
+                    SimpleMedia.generateAndSendFileForObject(
+                        name,
+                        args[0],
+                        bot,
+                        chatID,
+                        cx,
+                        scope
+                    )
+                    return ""
+
+                }
+            }
+        }
+
+        //ScriptableObject.putProperty(ScriptableObject.getObjectPrototype(to), "toFile", toFile)
+        ScriptableObject.putProperty(to, "toFile", toFile)
+
+
+        ScriptableObject.putProperty(to, "readFile", object : BaseFunction() {
+
+            override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<Any>): Any? {
+                if (args.isNotEmpty() && remaining > 0) {
+                    val argument = args[0]
+
+                    if(argument is Scriptable){
+                        val fromJS = SimpleMedia.fromJS(argument)
+                        if(fromJS!== null && fromJS.mediaType==SimpleMedia.DOCUMENT){
+                            return fromJS.getDocumentContents(bot)
+                        }
+                    }
+
+                    throw JSBotException("Invalid argument type.")
+                } else if (remaining <= 0) {
+                    throw JSBotException("Operation limit reached.")
+                } else {
+                    throw JSBotException("Illegal number of arguments.")
+                }
+            }
+
+            override fun getArity(): Int {
+                return 1
+            }
+        })
+
 
         //adds the media in the message the user is referring to (or null if not present)
         val referredMedia = SimpleMedia.fromMessage(message.replyToMessage)?.toJS(cx, to)
@@ -656,21 +733,12 @@ class JSBot(
         println("Saving Scope $filename")
 
         PrintWriter(FileOutputStream(filename)).use {
-            val source = serialize(context, saved)
+            val source = saved.serialize(context)
             it.println(source)
         }
     }
 
-    private fun serialize(context: Context, theObject: Scriptable): String {
-        val result = context.evaluateString(
-            theObject,
-            "toSource()",
-            "<save>",
-            1,
-            null
-        )
-        return Context.toString(result)
-    }
+
 
 
     private fun loadScope(chatId: Long, context: Context, saved: Scriptable): Any {
@@ -720,5 +788,16 @@ fun JSONObject.toScriptable(cx: Context, scope: Scriptable) : Any {
 }
 fun String.toScriptable(cx: Context, scope: Scriptable) : Any {
     return cx.evaluateString(scope, "\"${this}\"", "toScriptable", 1, null)
+}
+
+fun Scriptable.serialize(context: Context): String {
+    val result = context.evaluateString(
+        this,
+        "toSource()",
+        "<save>",
+        1,
+        null
+    )
+    return Context.toString(result)
 }
 

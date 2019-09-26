@@ -10,7 +10,15 @@ interface Role {
 
     fun getAbilites(): Set<String>
 
+    fun getValue(): Int
+
     fun isAuthorized(ability: String) = getAbilites().contains(ability)
+
+    fun isChangeRoleAuthorized(targetUser: Role, toRole: Role): Boolean {
+        return isAuthorized(SET_ROLES_ABILITY)
+                && targetUser.getValue() < this.getValue()
+                && toRole.getValue() <= this.getValue()
+    }
 
     companion object {
 
@@ -20,7 +28,6 @@ interface Role {
         const val MODERATOR_ROLE = "MODERATOR"
         const val ADMIN_ROLE = "ADMIN"
         const val SUPER_ADMIN_ROLE = "SUPER_ADMIN"
-
 
         const val PRIVATE_USE_BOT_ABILITY = "PRIVATE_USE_BOT_ABILITY"
         const val GROUP_USE_BOT_ABILITY = "GROUP_USE_BOT_ABILITY"
@@ -49,6 +56,7 @@ interface Role {
         open class NotAuthorized : Role {
             override fun getRoleName() = NOT_AUTHORIZED_ROLE
             override fun getAbilites() = setOf<String>()
+            override fun getValue() = 0
         }
 
         open class GroupUser : Role {
@@ -56,6 +64,8 @@ interface Role {
             override fun getAbilites() = setOf(
                 GROUP_USE_BOT_ABILITY
             )
+
+            override fun getValue() = 1
         }
 
         open class User : GroupUser() {
@@ -63,6 +73,8 @@ interface Role {
             override fun getAbilites() = super.getAbilites() + setOf(
                 PRIVATE_USE_BOT_ABILITY
             )
+
+            override fun getValue() = super.getValue() + 1
         }
 
         open class Moderator : User() {
@@ -70,15 +82,20 @@ interface Role {
             override fun getAbilites() = super.getAbilites() + setOf(
                 PANIC_ABILITY,
                 USER_DATABASE_READ_ABILITY,
-                PRIVATE_MESSAGING_ABILITY
+                PRIVATE_MESSAGING_ABILITY,
+                SET_ROLES_ABILITY
             )
+
+            override fun getValue() = super.getValue() + 1
         }
 
         open class Admin : Moderator() {
             override fun getRoleName() = ADMIN_ROLE
             override fun getAbilites() = super.getAbilites() + setOf(
-                SET_ROLES_ABILITY
+
             )
+
+            override fun getValue() = super.getValue() + 1
         }
 
         open class SuperAdmin : Admin() {
@@ -88,6 +105,8 @@ interface Role {
                 BOT_ACCESS_ABILITY,
                 LOAD_FILE_ABILITY
             )
+
+            override fun getValue() = super.getValue() + 1
         }
 
     }
