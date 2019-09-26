@@ -3,9 +3,12 @@ package jsbot
 import org.mozilla.javascript.Context
 import org.mozilla.javascript.Scriptable
 import org.mozilla.javascript.ScriptableObject
+import org.telegram.telegrambots.meta.api.methods.AnswerInlineQuery
 import org.telegram.telegrambots.meta.api.methods.send.*
 import org.telegram.telegrambots.meta.api.objects.Message
 import org.telegram.telegrambots.meta.api.methods.GetFile
+import org.telegram.telegrambots.meta.api.objects.inlinequery.InlineQuery
+import org.telegram.telegrambots.meta.api.objects.inlinequery.result.cached.*
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
@@ -110,6 +113,45 @@ class SimpleMedia(var mediaType: String, var fileID: String) {
                 VIDEO -> bot.execute(SendVideo().setVideo(fileID).setChatId(chatID).disableNotification())
                 VOICE -> bot.execute(SendVoice().setVoice(fileID).setChatId(chatID).disableNotification())
             }
+        }
+
+        fun giveInlineQueryResult(command: String, media: SimpleMedia?, inlineQuery:InlineQuery, bot:JSBot, withText: String? = null){
+            if (media == null) {
+                bot.execute(if(withText !== null){
+                    answerInlineQuery(inlineQuery, command, withText)
+                }else{
+                    answerInlineQuery(inlineQuery, command, "null")
+                })
+                return
+            }
+            val fileID = media.fileID
+
+            val queryId = inlineQuery.id
+
+            when(media.mediaType) {
+                ANIMATION -> bot.execute(AnswerInlineQuery().setInlineQueryId(queryId).setResults(
+                    InlineQueryResultCachedGif().setGifFileId(fileID).setId(queryId)
+                ))
+                AUDIO -> bot.execute(AnswerInlineQuery().setInlineQueryId(queryId).setResults(
+                    InlineQueryResultCachedAudio().setAudioFileId(fileID).setId(queryId)
+                ))
+                DOCUMENT -> bot.execute(AnswerInlineQuery().setInlineQueryId(queryId).setResults(
+                    InlineQueryResultCachedDocument().setDocumentFileId(fileID).setId(queryId)
+                ))
+                PHOTO -> bot.execute(AnswerInlineQuery().setInlineQueryId(queryId).setResults(
+                    InlineQueryResultCachedPhoto().setPhotoFileId(fileID).setId(queryId)
+                ))
+                STICKER -> bot.execute(AnswerInlineQuery().setInlineQueryId(queryId).setResults(
+                    InlineQueryResultCachedSticker().setStickerFileId(fileID).setId(queryId)
+                ))
+                VIDEO -> bot.execute(AnswerInlineQuery().setInlineQueryId(queryId).setResults(
+                    InlineQueryResultCachedVideo().setVideoFileId(fileID).setId(queryId)
+                ))
+                VOICE -> bot.execute(AnswerInlineQuery().setInlineQueryId(queryId).setResults(
+                    InlineQueryResultCachedVoice().setVoiceFileId(fileID).setId(queryId)
+                ))
+            }
+
         }
 
 

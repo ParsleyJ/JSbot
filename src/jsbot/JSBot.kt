@@ -3,10 +3,14 @@ package jsbot
 import org.json.JSONObject
 import org.mozilla.javascript.*
 import org.telegram.telegrambots.bots.TelegramLongPollingBot
+import org.telegram.telegrambots.meta.api.methods.AnswerInlineQuery
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage
 import org.telegram.telegrambots.meta.api.objects.Message
 import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.api.objects.User
+import org.telegram.telegrambots.meta.api.objects.inlinequery.InlineQuery
+import org.telegram.telegrambots.meta.api.objects.inlinequery.inputmessagecontent.InputTextMessageContent
+import org.telegram.telegrambots.meta.api.objects.inlinequery.result.InlineQueryResultArticle
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -42,7 +46,7 @@ class JSBot(
                     val message = update.message!!
 
                     println()
-                    println("From ${message.chatId}:${message.from?.id}:${message.from?.userName} --------------")
+                    println("From ${message.from?.id}:${message.from?.userName}@${message.chatId} --------------")
 
                     if (message.isUserMessage && message.chatId !== null
                         && !retrieveRoleFromId(message.chatId.toInt()).isAuthorized(Role.PRIVATE_USE_BOT_ABILITY)
@@ -101,6 +105,42 @@ class JSBot(
 
                         }
                     }
+                } else if (update.hasInlineQuery()) {
+                    val inlineQuery = update.inlineQuery!!
+
+                    val from = inlineQuery.from!!
+
+                    println()
+                    println("Query from ${from.id}:${from.userName} --------------")
+
+                    if (!retrieveRoleFromId(inlineQuery.from.id.toInt()).isAuthorized(Role.PRIVATE_USE_BOT_ABILITY)) {
+                        println("Not authorized: " + Role.PRIVATE_USE_BOT_ABILITY)
+                        return@wc
+                    }
+
+
+                    if (inlineQuery.hasQuery() && inlineQuery.query !== null) {
+                        val text = inlineQuery.query
+                        if (text.isNotEmpty()) {
+                            println("Text: '$text'")
+
+                            val scope = retrieveScope(it, from.id.toLong(), null)!!
+
+                            doQueryInTime(scope, text, inlineQuery, 3)
+
+                            val saved = scope.get("saved", scope)
+                            if (saved != Scriptable.NOT_FOUND
+                                && saved != Context.getUndefinedValue()
+                                && saved is ScriptableObject
+                            ) {
+                                saveScope(from.id.toLong(), it, saved)
+                            }
+
+                            saveUsernameMap()
+                            saveUserRoles()
+                        }
+                    }
+
                 }
             } catch (e: KotlinNullPointerException) {
                 e.printStackTrace()
@@ -197,10 +237,63 @@ class JSBot(
         }
     }
 
+    private fun doQueryInTime(
+        scope: Scriptable,
+        text: String,
+        inlineQuery: InlineQuery,
+        seconds: Long
+    ) {
+        val executor = Executors.newSingleThreadExecutor()
+        println("Started Job...")
 
-    /*
-    TODO: try to use kotlin coroutines instead of threads
-     */
+        val invokeAll = executor.invokeAll(
+            mutableListOf(Callable {
+                withContext { it2 ->
+
+
+                    try {
+
+
+                        val result: Any? = try {
+                                it2.evaluateString(scope, text, "<cmd>", 1, null)
+                        } catch (e: Throwable) {
+                                println(e.message)
+                                e.message
+                        }
+
+
+                        if (result is Scriptable) {
+                            val media = SimpleMedia.fromJS(result)
+                            if (media !== null) {
+                                SimpleMedia.giveInlineQueryResult(text, media, inlineQuery, this)
+                            } else {
+                                inlineQueryTextResult(text, result, inlineQuery)
+                            }
+                        } else {
+                            inlineQueryTextResult(text, result, inlineQuery)
+                        }
+
+
+                    } catch (e: RhinoException) {
+                        println(e.message)
+                    } catch (e: JSBotException) {
+                        println(e.message)
+                    } catch (e: Throwable) {
+                        e.printStackTrace()
+                    }
+                    println("Ended Job.")
+                }
+            }),
+            seconds, TimeUnit.SECONDS
+        )
+
+        if (invokeAll[0].isCancelled) {
+            println("Cancelled Job.")
+        }
+        executor.shutdown()
+    }
+
+
     private fun doInTime(
         scope: Scriptable,
         text: String,
@@ -211,89 +304,87 @@ class JSBot(
         println("Started Job...")
 
         val invokeAll = executor.invokeAll(
-            mutableListOf(
-                Callable {
-                    withContext { it2 ->
+            mutableListOf(Callable {
+                withContext { it2 ->
 
-                        if (text.startsWith("SEPPUKU")) {
-                            if (retrieveRoleFromUser(message.from).isAuthorized(Role.PANIC_ABILITY)) {
+                    if (text.startsWith("SEPPUKU")) {
+                        if (retrieveRoleFromUser(message.from).isAuthorized(Role.PANIC_ABILITY)) {
 
-                                execute(SendMessage(message.chatId, "cout << \"Sto morendo!\";"))
+                            execute(SendMessage(message.chatId, "cout << \"Sto morendo!\";"))
 
-                                exitProcess(2) //HARAKIRIIIII
+                            exitProcess(2) //HARAKIRIIIII
 
-                            }
                         }
+                    }
 
-                        try {
-                            if (text == "JS!"
-                                && message.replyToMessage !== null
-                                && message.replyToMessage.hasText()
-                                && message.replyToMessage.text !== null
-                                && message.from.id == message.replyToMessage.from.id
-                            ) {
-                                val result: Any? = try {
-                                    var command = message.replyToMessage.text
-                                    if (command.startsWith("JS ")) {
-                                        command = command.substring(3)
-                                    }
+                    try {
+                        if (text == "JS!"
+                            && message.replyToMessage !== null
+                            && message.replyToMessage.hasText()
+                            && message.replyToMessage.text !== null
+                            && message.from.id == message.replyToMessage.from.id
+                        ) {
+                            val result: Any? = try {
+                                var command = message.replyToMessage.text
+                                if (command.startsWith("JS ")) {
+                                    command = command.substring(3)
+                                }
+                                it2.evaluateString(scope, command, "<cmd>", 1, null)
+                            } catch (e: Throwable) {
+                                println(e.message)
+                                e.message
+                            }
+
+                            if (result is Scriptable) {
+                                val media = SimpleMedia.fromJS(result)
+                                if (media !== null) {
+                                    replyWithSimpleMedia(media, message)
+                                } else {
+                                    replyWithText(result, message)
+                                }
+                            } else {
+                                replyWithText(result, message)
+                            }
+                        } else {
+
+                            val showError = text.startsWith("JS ")
+                            var command = text
+
+                            val result: Any? = if (showError) {
+                                try {
+                                    command = text.substring(3)
                                     it2.evaluateString(scope, command, "<cmd>", 1, null)
                                 } catch (e: Throwable) {
                                     println(e.message)
                                     e.message
                                 }
+                            } else {
+                                it2.evaluateString(scope, command, "<cmd>", 1, null)
+                            }
 
-                                if (result is Scriptable) {
-                                    val media = SimpleMedia.fromJS(result)
-                                    if (media !== null) {
-                                        replyWithSimpleMedia(media, message)
-                                    } else {
-                                        replyWithText(result, message)
-                                    }
+                            if (result is Scriptable) {
+                                val media = SimpleMedia.fromJS(result)
+                                if (media !== null) {
+                                    replyWithSimpleMedia(media, message)
                                 } else {
                                     replyWithText(result, message)
                                 }
                             } else {
-
-                                val showError = text.startsWith("JS ")
-                                var command = text
-
-                                val result: Any? = if (showError) {
-                                    try {
-                                        command = text.substring(3)
-                                        it2.evaluateString(scope, command, "<cmd>", 1, null)
-                                    } catch (e: Throwable) {
-                                        println(e.message)
-                                        e.message
-                                    }
-                                } else {
-                                    it2.evaluateString(scope, command, "<cmd>", 1, null)
-                                }
-
-                                if (result is Scriptable) {
-                                    val media = SimpleMedia.fromJS(result)
-                                    if (media !== null) {
-                                        replyWithSimpleMedia(media, message)
-                                    } else {
-                                        replyWithText(result, message)
-                                    }
-                                } else {
-                                    replyWithText(result, message)
-                                }
-
+                                replyWithText(result, message)
                             }
-                        } catch (e: RhinoException) {
-                            println(e.message)
-                        } catch (e: JSBotException) {
-                            println(e.message)
-                        } catch (e: Throwable) {
-                            e.printStackTrace()
+
                         }
-                        println("Ended Job.")
+                    } catch (e: RhinoException) {
+                        println(e.message)
+                    } catch (e: JSBotException) {
+                        println(e.message)
+                    } catch (e: Throwable) {
+                        e.printStackTrace()
                     }
-                }),
-            seconds,
-            TimeUnit.SECONDS
+                    println("Ended Job.")
+                }
+            }),
+            seconds, TimeUnit.SECONDS
         )
 
         if (invokeAll[0].isCancelled) {
@@ -301,6 +392,42 @@ class JSBot(
         }
         executor.shutdown()
     }
+
+
+    private fun inlineQueryTextResult(command:String, result: Any?, inlineQuery: InlineQuery){
+        var textResult = Context.toString(result)
+        textResult = if (textResult === null) "<null text>" else textResult
+        if(textResult.isNullOrBlank()){
+            textResult = "<empty string>"
+        }
+
+
+        execute(AnswerInlineQuery()
+            .setInlineQueryId(inlineQuery.id)
+            .setResults(
+                InlineQueryResultArticle()
+                    .setId(inlineQuery.id)
+                    .setTitle(command)
+                    .setDescription(textResult)
+                    .setInputMessageContent(
+                        InputTextMessageContent()
+                            .setMessageText(textResult)
+                    ),
+                InlineQueryResultArticle()
+                    .setId(inlineQuery.id+"WCOMM")
+                    .setTitle("Show command too")
+                    .setDescription(textResult)
+                    .setInputMessageContent(
+                        InputTextMessageContent()
+                            .setMessageText("$command ->\n$textResult")
+                    )
+            )
+        )
+
+    }
+
+
+
 
     private fun replyWithText(result: Any?, message: Message) {
         var textResult = Context.toString(result)
@@ -431,14 +558,15 @@ class JSBot(
                             val id = usernamesMap[argUser]
                             if (id !== null) {
                                 remainingRole--
-                                if(retrievedRole.isChangeRoleAuthorized(
-                                        userRoles[id]?: Role.create(defaultRole)!!,
+                                if (retrievedRole.isChangeRoleAuthorized(
+                                        userRoles[id] ?: Role.create(defaultRole)!!,
                                         createdRole
-                                    )){
+                                    )
+                                ) {
                                     userRoles[id] = createdRole
                                     saveUserRoles()
                                     return true
-                                }else{
+                                } else {
                                     throw JSBotException("Unsufficient privileges.")
                                 }
                             }
@@ -449,14 +577,15 @@ class JSBot(
                                 throw JSBotException("Creator's role is immutable.")
                             }
                             remainingRole--
-                            if(retrievedRole.isChangeRoleAuthorized(
-                                    userRoles[argUser.toInt()]?: Role.create(defaultRole)!!,
+                            if (retrievedRole.isChangeRoleAuthorized(
+                                    userRoles[argUser.toInt()] ?: Role.create(defaultRole)!!,
                                     createdRole
-                                )){
+                                )
+                            ) {
                                 userRoles[argUser.toInt()] = createdRole
                                 saveUserRoles()
                                 return true
-                            }else{
+                            } else {
                                 throw JSBotException("Unsufficient privileges.")
                             }
                         } else if (argUser is Scriptable) {
@@ -465,14 +594,15 @@ class JSBot(
                                 if (fromJS.id == creatorId) {
                                     throw JSBotException("Creator's role is immutable.")
                                 }
-                                if(retrievedRole.isChangeRoleAuthorized(
-                                        userRoles[fromJS.id]?: Role.create(defaultRole)!!,
+                                if (retrievedRole.isChangeRoleAuthorized(
+                                        userRoles[fromJS.id] ?: Role.create(defaultRole)!!,
                                         createdRole
-                                    )){
+                                    )
+                                ) {
                                     userRoles[fromJS.id] = createdRole
                                     saveUserRoles()
                                     return true
-                                }else{
+                                } else {
                                     throw JSBotException("Unsufficient privileges.")
                                 }
                             } else {
@@ -560,7 +690,7 @@ class JSBot(
             }
         })
 
-        if(Emoji.isEmojiLoaded()) {
+        if (Emoji.isEmojiLoaded()) {
             ScriptableObject.putProperty(to, "findEmoji", object : BaseFunction() {
                 override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<out Any>): Any? {
                     if (args.isNotEmpty()) {
@@ -633,14 +763,14 @@ class JSBot(
             }
         })
 
-        val toFile = object:BaseFunction(){
+        val toFile = object : BaseFunction() {
             override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<out Any>): Any? {
-                if(args.isEmpty() || args.size > 2){
+                if (args.isEmpty() || args.size > 2) {
                     throw JSBotException("Wrong number of arguments")
-                }else{
-                    val name = if(args.size == 1){
+                } else {
+                    val name = if (args.size == 1) {
                         "file"
-                    }else when (args[1]){
+                    } else when (args[1]) {
                         is String -> args[1] as String
                         else -> "file"
                     }
@@ -670,9 +800,9 @@ class JSBot(
                 if (args.isNotEmpty() && remaining > 0) {
                     val argument = args[0]
 
-                    if(argument is Scriptable){
+                    if (argument is Scriptable) {
                         val fromJS = SimpleMedia.fromJS(argument)
-                        if(fromJS!== null && fromJS.mediaType==SimpleMedia.DOCUMENT){
+                        if (fromJS !== null && fromJS.mediaType == SimpleMedia.DOCUMENT) {
                             return fromJS.getDocumentContents(bot)
                         }
                     }
@@ -739,15 +869,13 @@ class JSBot(
     }
 
 
-
-
     private fun loadScope(chatId: Long, context: Context, saved: Scriptable): Any {
         val filename = scopeFileName(chatId)
         val file = File(filename)
         if (file.exists() && file.isFile) {
             val fis = FileInputStream(file)
             fis.bufferedReader().use {
-                val result = context.evaluateReader(saved, it, "<load>", 1, null)
+                val result = context.evaluateReader(saved, it, "<load_$chatId>", 1, null)
                 if (result == Scriptable.NOT_FOUND || result === null) {
                     return Context.getUndefinedValue()
                 }
@@ -779,14 +907,15 @@ construct for portions of code with specific contexts.
 
 }
 
-fun List<String>.toScriptable(cx:Context, scope: Scriptable): Any {
+fun List<String>.toScriptable(cx: Context, scope: Scriptable): Any {
     return cx.newArray(scope, this.map { Context.javaToJS(it, scope) }.toTypedArray())
 }
 
-fun JSONObject.toScriptable(cx: Context, scope: Scriptable) : Any {
+fun JSONObject.toScriptable(cx: Context, scope: Scriptable): Any {
     return cx.evaluateString(scope, "(${this})", "toScriptable", 1, null)
 }
-fun String.toScriptable(cx: Context, scope: Scriptable) : Any {
+
+fun String.toScriptable(cx: Context, scope: Scriptable): Any {
     return cx.evaluateString(scope, "\"${this}\"", "toScriptable", 1, null)
 }
 
@@ -799,5 +928,24 @@ fun Scriptable.serialize(context: Context): String {
         null
     )
     return Context.toString(result)
+}
+
+fun answerInlineQuery(
+    inlineQuery: InlineQuery,
+    title : String,
+    textResult: String?
+): AnswerInlineQuery? {
+    return AnswerInlineQuery()
+        .setInlineQueryId(inlineQuery.id)
+        .setResults(
+            InlineQueryResultArticle()
+                .setId(inlineQuery.id)
+                .setTitle(title)
+                .setDescription(textResult)
+                .setInputMessageContent(
+                    InputTextMessageContent()
+                        .setMessageText(textResult)
+                )
+        )
 }
 
