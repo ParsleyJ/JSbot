@@ -13,6 +13,7 @@ class User(val id: Int, var userName: String? = null) {
         val to = cx.newObject(scope)
         ScriptableObject.putProperty(to, "id", id)
         ScriptableObject.putProperty(to, "username", userName)
+
         ScriptableObject.putProperty(to, "getRole", object : BaseFunction() {
             override fun call(cx: Context?, scope: Scriptable?, thisObj: Scriptable?, args: Array<out Any>?): Any? {
                 return bot.userRoles[id]?.getRoleName()

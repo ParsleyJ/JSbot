@@ -8,6 +8,8 @@ import org.telegram.telegrambots.meta.api.methods.send.*
 import org.telegram.telegrambots.meta.api.objects.Message
 import org.telegram.telegrambots.meta.api.methods.GetFile
 import org.telegram.telegrambots.meta.api.objects.inlinequery.InlineQuery
+import org.telegram.telegrambots.meta.api.objects.inlinequery.inputmessagecontent.InputTextMessageContent
+import org.telegram.telegrambots.meta.api.objects.inlinequery.result.InlineQueryResultArticle
 import org.telegram.telegrambots.meta.api.objects.inlinequery.result.cached.*
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -34,19 +36,18 @@ class SimpleMedia(var mediaType: String, var fileID: String) {
     fun downloadByFilePath(bot: JSBot, filePath: String) = bot.downloadFile(filePath)
 
 
-
-    fun getDocumentContents(bot: JSBot): String{
-        if(mediaType == DOCUMENT){
+    fun getDocumentContents(bot: JSBot): String {
+        if (mediaType == DOCUMENT) {
             val tgFile = bot.execute(GetFile().setFileId(fileID))
 
             val fileSize = tgFile.fileSize
-            if(fileSize > FILE_LIMIT){
+            if (fileSize > FILE_LIMIT) {
                 throw JSBot.JSBotException("File too big: $fileSize")
             }
             val stream = bot.downloadFileAsStream(tgFile)
 
             return BufferedReader(InputStreamReader(stream)).readText()
-        }else{
+        } else {
             throw JSBot.JSBotException("Invalid media type")
         }
     }
@@ -115,45 +116,85 @@ class SimpleMedia(var mediaType: String, var fileID: String) {
             }
         }
 
-        fun giveInlineQueryResult(command: String, media: SimpleMedia?, inlineQuery:InlineQuery, bot:JSBot, withText: String? = null){
+        fun giveInlineQueryResult(
+            command: String,
+            media: SimpleMedia?,
+            inlineQuery: InlineQuery,
+            bot: JSBot,
+            withText: String? = null
+        ) {
             if (media == null) {
-                bot.execute(if(withText !== null){
-                    answerInlineQuery(inlineQuery, command, withText)
-                }else{
-                    answerInlineQuery(inlineQuery, command, "null")
-                })
+                bot.execute(
+                    if (withText !== null) {
+                        answerInlineQuery(inlineQuery, command, withText)
+                    } else {
+                        answerInlineQuery(inlineQuery, command, "null")
+                    }
+                )
                 return
             }
             val fileID = media.fileID
 
             val queryId = inlineQuery.id
 
-            when(media.mediaType) {
-                ANIMATION -> bot.execute(AnswerInlineQuery().setInlineQueryId(queryId).setResults(
-                    InlineQueryResultCachedGif().setGifFileId(fileID).setId(queryId)
-                ))
-                AUDIO -> bot.execute(AnswerInlineQuery().setInlineQueryId(queryId).setResults(
-                    InlineQueryResultCachedAudio().setAudioFileId(fileID).setId(queryId)
-                ))
-                DOCUMENT -> bot.execute(AnswerInlineQuery().setInlineQueryId(queryId).setResults(
-                    InlineQueryResultCachedDocument().setDocumentFileId(fileID).setId(queryId)
-                ))
-                PHOTO -> bot.execute(AnswerInlineQuery().setInlineQueryId(queryId).setResults(
-                    InlineQueryResultCachedPhoto().setPhotoFileId(fileID).setId(queryId)
-                ))
-                STICKER -> bot.execute(AnswerInlineQuery().setInlineQueryId(queryId).setResults(
-                    InlineQueryResultCachedSticker().setStickerFileId(fileID).setId(queryId)
-                ))
-                VIDEO -> bot.execute(AnswerInlineQuery().setInlineQueryId(queryId).setResults(
-                    InlineQueryResultCachedVideo().setVideoFileId(fileID).setId(queryId)
-                ))
-                VOICE -> bot.execute(AnswerInlineQuery().setInlineQueryId(queryId).setResults(
-                    InlineQueryResultCachedVoice().setVoiceFileId(fileID).setId(queryId)
-                ))
+            when (media.mediaType) {
+                ANIMATION -> bot.execute(
+                    AnswerInlineQuery().setInlineQueryId(queryId).setResults(
+                        InlineQueryResultCachedGif().setGifFileId(fileID).setId(queryId)
+                    )
+                )
+                AUDIO -> bot.execute(
+                    AnswerInlineQuery().setInlineQueryId(queryId).setResults(
+                        InlineQueryResultCachedAudio().setAudioFileId(fileID).setId(queryId)
+                    )
+                )
+                DOCUMENT -> bot.execute(
+                    AnswerInlineQuery().setInlineQueryId(queryId).setResults(
+                        InlineQueryResultCachedDocument().setDocumentFileId(fileID).setId(queryId)
+                    )
+                )
+                PHOTO -> bot.execute(
+                    AnswerInlineQuery().setInlineQueryId(queryId).setResults(
+                        InlineQueryResultCachedPhoto().setPhotoFileId(fileID).setId(queryId)
+                    )
+                )
+                STICKER -> bot.execute(
+                    AnswerInlineQuery().setInlineQueryId(queryId).setResults(
+                        InlineQueryResultCachedSticker().setStickerFileId(fileID).setId(queryId)
+                    )
+                )
+                VIDEO -> bot.execute(
+                    AnswerInlineQuery().setInlineQueryId(queryId).setResults(
+                        InlineQueryResultCachedVideo().setVideoFileId(fileID).setId(queryId)
+                    )
+                )
+                VOICE -> bot.execute(
+                    AnswerInlineQuery().setInlineQueryId(queryId).setResults(
+                        InlineQueryResultCachedVoice().setVoiceFileId(fileID).setId(queryId)
+                    )
+                )
             }
 
         }
 
+        fun answerInlineQuery(
+            inlineQuery: InlineQuery,
+            title: String,
+            textResult: String?
+        ): AnswerInlineQuery? {
+            return AnswerInlineQuery()
+                .setInlineQueryId(inlineQuery.id)
+                .setResults(
+                    InlineQueryResultArticle()
+                        .setId(inlineQuery.id)
+                        .setTitle(title)
+                        .setDescription(textResult)
+                        .setInputMessageContent(
+                            InputTextMessageContent()
+                                .setMessageText(textResult)
+                        )
+                )
+        }
 
         fun generateAndSendFile(name: String, contents: String, bot: JSBot, chatID: Long) {
             val sendDoc = SendDocument()
@@ -173,17 +214,27 @@ class SimpleMedia(var mediaType: String, var fileID: String) {
             cx: Context,
             scope: Scriptable
         ) {
-            val jscontents = if(contents is Scriptable) {
+            val jscontents = if (contents is Scriptable) {
                 contents
-            }else {
-                Context.javaToJS(contents,scope)
+            } else {
+                Context.javaToJS(contents, scope)
             }
 
-            if(jscontents is Scriptable){
+            if (jscontents is Scriptable) {
                 generateAndSendFile(name, jscontents.serialize(cx), bot, chatID)
-            }else{
+            } else {
                 generateAndSendFile(name, jscontents.toString(), bot, chatID)
             }
+        }
+
+        fun hasMedia(message: Message): Boolean {
+            return message.hasAnimation()
+                    || message.hasAudio()
+                    || message.hasDocument()
+                    || message.hasPhoto()
+                    || message.hasSticker()
+                    || message.hasVideo()
+                    || message.hasVoice()
         }
     }
 }
