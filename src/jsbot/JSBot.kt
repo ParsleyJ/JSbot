@@ -245,10 +245,10 @@ class JSBot : TelegramLongPollingBot {
                                     val media = SimpleMedia.fromJS(result)
                                     if (media !== null) {
                                         replyWithSimpleMedia(media, message)
-                                    } else {
+                                    } else if(result!= Undefined.instance){
                                         replyWithText(result, message)
                                     }
-                                } else {
+                                } else if(result!= Undefined.instance){
                                     replyWithText(result, message)
                                 }
                             } catch (e: RhinoException) {
