@@ -876,6 +876,46 @@ class JSBot : TelegramLongPollingBot {
 
         })
 
+        //defines native "message" function with markdown formatting
+        ScriptableObject.putProperty(to, "mdMessage", JSFunction(1) f@{ _, _, _, args ->
+            if (args.isNotEmpty() && remaining > 0) {
+                var text = Context.toString(args[0])
+                text = if (text === null || text.isEmpty()) "_" else text
+                bot.execute(
+                    SendMessage()
+                        .setChatId(chatID)
+                        .setText(text)
+                        .enableMarkdown(true)
+                        .disableNotification()
+                )
+                --remaining
+            } else if (remaining <= 0) {
+                throw JSBotException("Message limit reached.")
+            }
+            return@f ""
+
+        })
+
+        //defines native "message" function with html formatting
+        ScriptableObject.putProperty(to, "htmlMessage", JSFunction(1) f@{ _, _, _, args ->
+            if (args.isNotEmpty() && remaining > 0) {
+                var text = Context.toString(args[0])
+                text = if (text === null || text.isEmpty()) "_" else text
+                bot.execute(
+                    SendMessage()
+                        .setChatId(chatID)
+                        .setText(text)
+                        .enableHtml(true)
+                        .disableNotification()
+                )
+                --remaining
+            } else if (remaining <= 0) {
+                throw JSBotException("Message limit reached.")
+            }
+            return@f ""
+
+        })
+
         //adds the sendMedia function to the scope
         ScriptableObject.putProperty(to, "sendMedia", JSFunction(1) f@{ _, _, _, args ->
             if (args.isNotEmpty() && remaining > 0) {
