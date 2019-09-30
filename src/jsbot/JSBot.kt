@@ -103,21 +103,24 @@ class JSBot : TelegramLongPollingBot {
                             val scope = retrieveScope(it, message.chatId, message)!!
 
 
-                            val noev = text.startsWith("NOEV ")
-                            if(noev){
-                                text = text.substring(5)
-                            }
+                            val isNoev = text.startsWith("NOEV ")
 
-                            doInTime(scope, text, message, 3)
-
-                            if (!noev) {
-                                handleEventInTime(
+                            var blockEvaluation = false
+                            if (!isNoev) {
+                                blockEvaluation = handleEventInTime(
                                     scope,
                                     Event(Event.TEXT_MESSAGE_EVENT_TYPE, text),
                                     message,
                                     3
                                 )
+                            }else {
+                                text = text.substring(5)
                             }
+
+                            if(!blockEvaluation) {
+                                doInTime(scope, text, message, 3)
+                            }
+
 
                             val saved = scope.get("saved", scope)
                             if (saved != Scriptable.NOT_FOUND
@@ -222,12 +225,13 @@ class JSBot : TelegramLongPollingBot {
         }
     }
 
-    private fun handleEventInTime(
+    private fun handleEventInTime (
         scope: Scriptable,
         event: Event,
         message: Message,
         seconds: Long
-    ) {
+    ) : Boolean {
+        var shouldBlockEvaluation = false
         val executor = Executors.newSingleThreadExecutor()
         println("Event handlers - Started Job...")
 
@@ -241,16 +245,12 @@ class JSBot : TelegramLongPollingBot {
                             try {
                                 println("executing handler: $key")
                                 val result = func.call(it2, scope, scope, arrayOf(jsEvent))
-                                if (result != null && result is Scriptable) {
-                                    val media = SimpleMedia.fromJS(result)
-                                    if (media !== null) {
-                                        replyWithSimpleMedia(media, message)
-                                    } else if(result!= Undefined.instance){
-                                        replyWithText(result, message)
-                                    }
-                                } else if(result!= Undefined.instance){
-                                    replyWithText(result, message)
+
+                                if(Context.toBoolean(result)){
+                                    println("An event handler function returned true -> blocking evaluation")
+                                    shouldBlockEvaluation = true
                                 }
+
                             } catch (e: RhinoException) {
                                 println(e.message)
                             } catch (e: JSBotException) {
@@ -274,6 +274,7 @@ class JSBot : TelegramLongPollingBot {
             println("Cancelled Job.")
         }
         executor.shutdown()
+        return shouldBlockEvaluation
     }
 
 
