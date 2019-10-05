@@ -14,16 +14,16 @@ class User(val id: Int, var userName: String? = null) {
         ScriptableObject.putProperty(to, "id", id)
         ScriptableObject.putProperty(to, "username", userName)
 
-        ScriptableObject.putProperty(to, "getRole", object : BaseFunction() {
+        ScriptableObject.defineProperty(to, "getRole", object : BaseFunction() {
             override fun call(cx: Context?, scope: Scriptable?, thisObj: Scriptable?, args: Array<out Any>?): Any? {
                 return bot.userRoles[id]?.getRoleName()
             }
 
             override fun getArity(): Int = 0
-        })
+        }, ScriptableObject.DONTENUM)
 
 
-        ScriptableObject.putProperty(to, "getAbilities", object : BaseFunction() {
+        ScriptableObject.defineProperty(to, "getAbilities", object : BaseFunction() {
             override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<out Any>): Any {
                 val abilityList = mutableListOf<Any>()
                 bot.userRoles[id]?.getAbilites()?.forEach {
@@ -33,7 +33,7 @@ class User(val id: Int, var userName: String? = null) {
             }
 
             override fun getArity(): Int = 0
-        })
+        }, ScriptableObject.DONTENUM)
 
 
 
@@ -45,18 +45,18 @@ class User(val id: Int, var userName: String? = null) {
             val public = saved.get("public", saved)
             if(public is Scriptable){
                 val safePublic = cx.evaluateString(public, "eval(toSource())", "<clone>", 1, null)
-                ScriptableObject.putProperty(to, "public", safePublic)
+                ScriptableObject.defineProperty(to, "public", safePublic, ScriptableObject.DONTENUM)
             }else{
-                ScriptableObject.putProperty(to, "public", null)
+                ScriptableObject.defineProperty(to, "public", null, ScriptableObject.DONTENUM)
             }
         }else{
-            ScriptableObject.putProperty(to, "public", null)
+            ScriptableObject.defineProperty(to, "public", null, ScriptableObject.DONTENUM)
         }
 
         var remaining = 10
 
         if(jobMessage!==null) {
-            ScriptableObject.putProperty(to, "message", object : BaseFunction() {
+            ScriptableObject.defineProperty(to, "message", object : BaseFunction() {
 
                 override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<Any>): Any? {
                     if (!bot.retrieveRoleFromId(id).isAuthorized(Role.PRIVATE_MESSAGING_ABILITY)) {
@@ -80,9 +80,9 @@ class User(val id: Int, var userName: String? = null) {
                 override fun getArity(): Int {
                     return 1
                 }
-            })
+            }, ScriptableObject.DONTENUM)
 
-            ScriptableObject.putProperty(to, "sendMedia", object : BaseFunction() {
+            ScriptableObject.defineProperty(to, "sendMedia", object : BaseFunction() {
 
                 override fun call(cx: Context, scope: Scriptable, thisObj: Scriptable, args: Array<Any>): Any? {
                     if(!bot.retrieveRoleFromId(id).isAuthorized(Role.PRIVATE_MESSAGING_ABILITY)){
@@ -115,10 +115,10 @@ class User(val id: Int, var userName: String? = null) {
                 override fun getArity(): Int {
                     return 1
                 }
-            })
+            }, ScriptableObject.DONTENUM)
         }else{
-            ScriptableObject.putProperty(to, "message", null)
-            ScriptableObject.putProperty(to, "sendMedia", null)
+            ScriptableObject.defineProperty(to, "message", null, ScriptableObject.DONTENUM)
+            ScriptableObject.defineProperty(to, "sendMedia", null, ScriptableObject.DONTENUM)
         }
 
 

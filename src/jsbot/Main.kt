@@ -1,5 +1,7 @@
 package jsbot
 
+import org.apache.logging.log4j.LogManager
+import org.apache.logging.log4j.Logger
 import org.json.JSONObject
 import org.json.JSONTokener
 import org.mozilla.javascript.*
@@ -21,7 +23,7 @@ fun main(args: Array<String>) {
 
 
 
-
+    val logger: Logger = LogManager.getRootLogger()
 
 
 
@@ -41,7 +43,7 @@ fun main(args: Array<String>) {
             println("Usage: java -jar JSBot (properties-file)")
             return
         }
-        println("Working Directory = ${System.getProperty("user.dir")}")
+        logger.debug("Working Directory = ${System.getProperty("user.dir")}")
 
     } else {
         propFile = File(args[0])
@@ -52,16 +54,19 @@ fun main(args: Array<String>) {
     }
 
     val propertyFileDirectory = propFile.parent
-    println("Properties file = ${propFile.absolutePath}")
-    println("Directory of property file = $propertyFileDirectory")
+    logger.debug("Properties file = ${propFile.absolutePath}")
+    logger.debug("Directory of property file = $propertyFileDirectory")
+
+
+
     Emoji.loadEmojis("$propertyFileDirectory/emojis.json")
 
     if(Emoji.isEmojiLoaded()) {
         Emoji.findEmoji("rofl").forEach {
-            println(" $it emojis loaded $it ")
+            logger.debug(" $it emojis loaded $it ")
         }
     }else{
-        println("Could not load emojis.")
+        logger.debug("Could not load emojis.")
     }
     FileInputStream(propFile).use { input ->
         val properties = Properties()
@@ -70,9 +75,9 @@ fun main(args: Array<String>) {
         val username = properties.getProperty("tgapi.botUsername")
         val creator = properties.getProperty("creator.username")
         val creatorId = Integer.parseInt(properties.getProperty("creator.id"))
-        println("Token loaded = $token")
-        println("Username loaded = $username")
-        println("Creator = $creatorId:$creator")
+        logger.debug("Token loaded = $token")
+        logger.debug("Username loaded = $username")
+        logger.debug("Creator = $creatorId:$creator")
 
 
         val scopemap = mutableMapOf<Long, Scriptable>()

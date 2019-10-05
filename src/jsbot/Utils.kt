@@ -20,6 +20,8 @@ fun String.toScriptable(cx: Context, scope: Scriptable): Any {
     return cx.evaluateString(scope, "\"${this}\"", "toScriptable", 1, null)
 }
 
+
+
 fun Scriptable.serialize(context: Context): String {
     val result = context.evaluateString(
         this,

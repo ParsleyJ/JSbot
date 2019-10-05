@@ -1,5 +1,7 @@
 package jsbot
 
+import org.apache.logging.log4j.LogManager
+import org.apache.logging.log4j.Logger
 import org.json.JSONObject
 import org.mozilla.javascript.*
 import org.mozilla.javascript.Function
@@ -20,45 +22,23 @@ import java.io.*
 import kotlin.math.min
 
 
-class JSBot : TelegramLongPollingBot {
 
-
-    public val creator: String
-    public val creatorId: Int
-    public val scopemap: MutableMap<Long, Scriptable>
-    public val handlersMap: MutableMap<Long, MutableMap<String, Function>>
-    public val usernamesMap: MutableMap<String, Int>
-    public val userRoles: MutableMap<Int, Role>
-    private val username: String
+class JSBot(
+    public val creator: String,
+    public val creatorId: Int,
+    public val scopemap: MutableMap<Long, Scriptable>,// maps chat IDs to the scope reserved to such chats
+    public val usernamesMap: MutableMap<String, Int>, // maps usernames their user IDs
+    public val userRoles: MutableMap<Int, Role>,      // maps user IDs to their Role
+    private val username: String,
     private val botToken: String
+) : TelegramLongPollingBot() {
 
-
-    //maps chat IDs to the scope reserved to such chats
-    //maps usernames their user IDs
-    //maps user IDs to their Role
-    constructor(
-        creator: String,
-        creatorId: Int,
-        scopemap: MutableMap<Long, Scriptable>,
-        usernamesMap: MutableMap<String, Int>,
-        userRoles: MutableMap<Int, Role>,
-        username: String,
-        botToken: String
-    ) : super() {
-        this.creator = creator
-        this.creatorId = creatorId
-        this.scopemap = scopemap
-        this.usernamesMap = usernamesMap
-        this.userRoles = userRoles
-        this.username = username
-        this.botToken = botToken
-        this.handlersMap = mutableMapOf()
-    }
+    public val handlersMap: MutableMap<Long, MutableMap<String, Function>> = mutableMapOf()
 
     companion object {
+        val logger: Logger = LogManager.getRootLogger()
         const val defaultRole = Role.NOT_AUTHORIZED_ROLE
     }
-
 
     override fun getBotUsername(): String = username
     override fun getBotToken(): String = botToken
@@ -71,13 +51,13 @@ class JSBot : TelegramLongPollingBot {
                 if (update.hasMessage()) {
                     val message = update.message!!
 
-                    println()
-                    println("From ${message.from?.id}:${message.from?.userName}@${message.chatId} --------------")
 
+                    logger.debug("From ${message.from?.id}:${message.from?.userName}@${message.chatId} --------------")
+                    logUserInfo(message.from)
                     if (message.isUserMessage && message.chatId !== null
                         && !retrieveRoleFromId(message.chatId.toInt()).isAuthorized(Role.PRIVATE_USE_BOT_ABILITY)
                     ) {
-                        println("Not authorized: " + Role.PRIVATE_USE_BOT_ABILITY)
+                        logger.debug("Not authorized: " + Role.PRIVATE_USE_BOT_ABILITY)
                         return@wc
                     }
 
@@ -85,7 +65,7 @@ class JSBot : TelegramLongPollingBot {
                         val role = retrieveRoleFromUser(message.from)
 
                         if (!role.isAuthorized(Role.GROUP_USE_BOT_ABILITY)) {
-                            println("Not authorized: " + Role.GROUP_USE_BOT_ABILITY)
+                            logger.debug("Not authorized: " + Role.GROUP_USE_BOT_ABILITY)
                             return@wc
                         }
                     }
@@ -98,7 +78,7 @@ class JSBot : TelegramLongPollingBot {
                     if (message.hasText() && message.text !== null) {
                         var text = message.text
                         if (text.isNotEmpty()) {
-                            println("Text: '$text'")
+                            logger.debug("Text: '$text'")
 
                             val scope = retrieveScope(it, message.chatId, message)!!
 
@@ -113,11 +93,11 @@ class JSBot : TelegramLongPollingBot {
                                     message,
                                     3
                                 )
-                            }else {
+                            } else {
                                 text = text.substring(5)
                             }
 
-                            if(!blockEvaluation) {
+                            if (!blockEvaluation) {
                                 doInTime(scope, text, message, 3)
                             }
 
@@ -143,13 +123,11 @@ class JSBot : TelegramLongPollingBot {
 
                             saveUsernameMap()
                             saveUserRoles()
-
-
                         }
                     } else if (SimpleMedia.hasMedia(message)) {
 
                         val m = SimpleMedia.fromMessage(message)!!
-                        println("Media: { mediaType:\"${m.mediaType}\", fileID:\"${m.fileID}\" }")
+                        logger.debug("Media: { mediaType:\"${m.mediaType}\", fileID:\"${m.fileID}\" }")
 
                         val scope = retrieveScope(it, message.chatId, message)!!
 
@@ -187,11 +165,12 @@ class JSBot : TelegramLongPollingBot {
 
                     val from = inlineQuery.from!!
 
-                    println()
-                    println("Query from ${from.id}:${from.userName} --------------")
+                    logger.debug("Query from ${from.id}:${from.userName} --------------")
+
+                    logUserInfo(from)
 
                     if (!retrieveRoleFromId(inlineQuery.from.id.toInt()).isAuthorized(Role.PRIVATE_USE_BOT_ABILITY)) {
-                        println("Not authorized: " + Role.PRIVATE_USE_BOT_ABILITY)
+                        logger.debug("Not authorized: " + Role.PRIVATE_USE_BOT_ABILITY)
                         return@wc
                     }
 
@@ -199,7 +178,7 @@ class JSBot : TelegramLongPollingBot {
                     if (inlineQuery.hasQuery() && inlineQuery.query !== null) {
                         val text = inlineQuery.query
                         if (text.isNotEmpty()) {
-                            println("Text: '$text'")
+                            logger.debug("Text: '$text'")
 
                             val scope = retrieveScope(it, from.id.toLong(), null)!!
 
@@ -218,6 +197,8 @@ class JSBot : TelegramLongPollingBot {
                         }
                     }
 
+                }else if(update.hasEditedMessage()){
+                    
                 }
             } catch (e: KotlinNullPointerException) {
                 e.printStackTrace()
@@ -225,15 +206,27 @@ class JSBot : TelegramLongPollingBot {
         }
     }
 
-    private fun handleEventInTime (
+    private fun logUserInfo(from: User?) {
+        logger.debug("User info:")
+        if (from !== null) {
+            logger.debug("\tisBot = ${from.bot}")
+            logger.debug("\tID    = ${from.id}")
+            logger.debug("\tuName = ${from.userName}")
+            logger.debug("\tfName = ${from.firstName}")
+            logger.debug("\tlName = ${from.lastName}")
+            logger.debug("\tlang  = ${from.languageCode}")
+        }
+    }
+
+    private fun handleEventInTime(
         scope: Scriptable,
         event: Event,
         message: Message,
         seconds: Long
-    ) : Boolean {
+    ): Boolean {
         var shouldBlockEvaluation = false
         val executor = Executors.newSingleThreadExecutor()
-        println("Event handlers - Started Job...")
+        logger.debug("Event handlers - Started Job...")
 
         val invokeAll = executor.invokeAll(
             mutableListOf(Callable {
@@ -243,35 +236,35 @@ class JSBot : TelegramLongPollingBot {
                         val handlers = retrieveHandlers(message.chatId)
                         handlers.forEach { (key, func) ->
                             try {
-                                println("executing handler: $key")
+                                logger.debug("executing handler: $key")
                                 val result = func.call(it2, scope, scope, arrayOf(jsEvent))
 
-                                if(Context.toBoolean(result)){
-                                    println("An event handler function returned true -> blocking evaluation")
+                                if (Context.toBoolean(result)) {
+                                    logger.debug("An event handler function returned true -> blocking evaluation")
                                     shouldBlockEvaluation = true
                                 }
 
                             } catch (e: RhinoException) {
-                                println(e.message)
+                                logger.error(e)
                             } catch (e: JSBotException) {
-                                println(e.message)
+                                logger.error(e)
                             }
                         }
                     } catch (e: RhinoException) {
-                        println(e.message)
+                        logger.error(e)
                     } catch (e: JSBotException) {
-                        println(e.message)
+                        logger.error(e)
                     } catch (e: Throwable) {
                         e.printStackTrace()
                     }
-                    println("Ended Job.")
+                    logger.debug("Ended Job.")
                 }
             }),
             seconds, TimeUnit.SECONDS
         )
 
         if (invokeAll[0].isCancelled) {
-            println("Cancelled Job.")
+            logger.debug("Cancelled Job.")
         }
         executor.shutdown()
         return shouldBlockEvaluation
@@ -285,7 +278,7 @@ class JSBot : TelegramLongPollingBot {
         seconds: Long
     ) {
         val executor = Executors.newSingleThreadExecutor()
-        println("Started Job...")
+        logger.debug("Started Job...")
 
         val invokeAll = executor.invokeAll(
             mutableListOf(Callable {
@@ -298,7 +291,7 @@ class JSBot : TelegramLongPollingBot {
                         val result: Any? = try {
                             it2.evaluateString(scope, text, "<cmd>", 1, null)
                         } catch (e: Throwable) {
-                            println(e.message)
+                            logger.error(e)
                             e.message
                         }
 
@@ -316,20 +309,20 @@ class JSBot : TelegramLongPollingBot {
 
 
                     } catch (e: RhinoException) {
-                        println(e.message)
+                        logger.error(e)
                     } catch (e: JSBotException) {
-                        println(e.message)
+                        logger.error(e)
                     } catch (e: Throwable) {
                         e.printStackTrace()
                     }
-                    println("Ended Job.")
+                    logger.debug("Ended Job.")
                 }
             }),
             seconds, TimeUnit.SECONDS
         )
 
         if (invokeAll[0].isCancelled) {
-            println("Cancelled Job.")
+            logger.debug("Cancelled Job.")
         }
         executor.shutdown()
     }
@@ -342,7 +335,7 @@ class JSBot : TelegramLongPollingBot {
         seconds: Long
     ) {
         val executor = Executors.newSingleThreadExecutor()
-        println("Started Job...")
+        logger.debug("Started Job...")
 
         val invokeAll = executor.invokeAll(
             mutableListOf(Callable {
@@ -372,7 +365,7 @@ class JSBot : TelegramLongPollingBot {
                                 }
                                 it2.evaluateString(scope, command, "<cmd>", 1, null)
                             } catch (e: Throwable) {
-                                println(e.message)
+                                logger.error(e)
                                 e.message
                             }
 
@@ -396,7 +389,7 @@ class JSBot : TelegramLongPollingBot {
                                     command = text.substring(3)
                                     it2.evaluateString(scope, command, "<cmd>", 1, null)
                                 } catch (e: Throwable) {
-                                    println(e.message)
+                                    logger.error(e)
                                     e.message
                                 }
                             } else {
@@ -416,27 +409,27 @@ class JSBot : TelegramLongPollingBot {
 
                         }
                     } catch (e: RhinoException) {
-                        println(e.message)
+                        logger.error(e)
                     } catch (e: JSBotException) {
-                        println(e.message)
+                        logger.error(e)
                     } catch (e: Throwable) {
                         e.printStackTrace()
                     }
-                    println("Ended Job.")
+                    logger.debug("Ended Job.")
                 }
             }),
             seconds, TimeUnit.SECONDS
         )
 
         if (invokeAll[0].isCancelled) {
-            println("Cancelled Job.")
+            logger.debug("Cancelled Job.")
         }
         executor.shutdown()
     }
 
 
     private fun saveUsernameMap() {
-        println("save usernames, size:${usernamesMap.size}")
+        logger.debug("save usernames, size:${usernamesMap.size}")
         val fileout = File("userchats.jsbot")
         fileout.bufferedWriter().use {
             usernamesMap.forEach { (userName, userId) ->
@@ -459,15 +452,15 @@ class JSBot : TelegramLongPollingBot {
                 }
             }
         }
-        println("loaded usernames, size:${usernamesMap.size}")
+        logger.debug("loaded usernames, size:${usernamesMap.size}")
         usernamesMap.forEach { (name, id) ->
-            println("$name:$id")
+            logger.debug("$name:$id")
         }
     }
 
 
     private fun saveUserRoles() {
-        println("save user roles, size:${userRoles.size}")
+        logger.debug("save user roles, size:${userRoles.size}")
         val fileout = File("userroles.jsbot")
         fileout.bufferedWriter().use {
             userRoles.forEach { (userId, role) ->
@@ -490,9 +483,9 @@ class JSBot : TelegramLongPollingBot {
                 }
             }
         }
-        println("loaded user roles, size:${userRoles.size}")
+        logger.debug("loaded user roles, size:${userRoles.size}")
         userRoles.forEach { (name, role) ->
-            println("$name:${role.getRoleName()}")
+            logger.debug("$name:${role.getRoleName()}")
         }
     }
 
@@ -586,7 +579,7 @@ class JSBot : TelegramLongPollingBot {
 
     fun retrieveScope(cx: Context, scopeID: Long, message: Message? = null): Scriptable? {
 
-        println("retrieving scope :$scopeID")
+        logger.debug("retrieving scope :$scopeID")
         val result = if (scopemap.containsKey(scopeID)) {
             scopemap[scopeID]
         } else {
@@ -594,13 +587,32 @@ class JSBot : TelegramLongPollingBot {
 
             val file = File(scopeFileName(scopeID))
             if (file.exists() && file.isFile) {
+                val loadedScope = loadScope(scopeID, cx, cx.newObject(scope))
                 ScriptableObject.defineProperty(
                     scope,
                     "saved",
-                    loadScope(scopeID, cx, cx.newObject(scope)),
+                    loadedScope,
                     ScriptableObject.READONLY or ScriptableObject.PERMANENT or ScriptableObject.DONTENUM
                 )
 
+                if (loadedScope is Scriptable && loadedScope != Undefined.instance) {
+                    when (val onBoot = loadedScope.get("onBoot", loadedScope)) {
+                        is Function -> {
+                            try {
+                                val onBootResult = onBoot.call(cx, scope, scope, arrayOf(loadedScope))
+                                execute(SendMessage().setText(Context.toString(onBootResult)).setChatId(scopeID).disableNotification())
+                            } catch (e: Throwable) {
+                                e.printStackTrace()
+                            }
+                        }
+                        is String -> try {
+                            execute(SendMessage().setText(onBoot).setChatId(scopeID).disableNotification())
+                        } catch (e: Throwable) {
+                            e.printStackTrace()
+                        }
+                    }
+                }
+                //TODO: invoke autoload?
             } else {
                 ScriptableObject.defineProperty(
                     scope,
@@ -617,13 +629,13 @@ class JSBot : TelegramLongPollingBot {
         if (result != null) {
 
             if (message !== null) {
-                println("retrieving scope :$scopeID ---: adding message-dependent properties")
+                logger.debug("retrieving scope :$scopeID ---: adding message-dependent properties")
                 addMessageDependentStuff(cx, result, this, message)
-                println("retrieving scope :$scopeID ---: adding user-dependent properties, user: ${message.from.id}")
+                logger.debug("retrieving scope :$scopeID ---: adding user-dependent properties, user: ${message.from.id}")
                 addUserStuff(cx, result, message.from.id, message)
             } else {
                 if (scopeID > 0) {
-                    println("retrieving scope :$scopeID ---: adding user-dependent properties (user chat)")
+                    logger.debug("retrieving scope :$scopeID ---: adding user-dependent properties (user chat)")
                     addUserStuff(cx, result, scopeID.toInt())
                 }
             }
@@ -1012,7 +1024,7 @@ class JSBot : TelegramLongPollingBot {
         )
 
         ScriptableObject.putProperty(to, "putHandler", JSFunction(2) f@{ _, _, _, args ->
-            if(!retrieveRoleFromUser(message.from).isAuthorized(Role.CHANGE_HANDLERS_ABILITY)){
+            if (!retrieveRoleFromUser(message.from).isAuthorized(Role.CHANGE_HANDLERS_ABILITY)) {
                 throw JSBotException("Not authorized to modify handlers.")
             }
             if (args.isEmpty() || args.size > 2) {
@@ -1033,11 +1045,11 @@ class JSBot : TelegramLongPollingBot {
             }
         })
 
-        ScriptableObject.putProperty(to, "removeHandler", JSFunction(1) f@{ _,_,_, args ->
-            if(!retrieveRoleFromUser(message.from).isAuthorized(Role.CHANGE_HANDLERS_ABILITY)){
+        ScriptableObject.putProperty(to, "removeHandler", JSFunction(1) f@{ _, _, _, args ->
+            if (!retrieveRoleFromUser(message.from).isAuthorized(Role.CHANGE_HANDLERS_ABILITY)) {
                 throw JSBotException("Not authorized to modify handlers.")
             }
-            if (args.size!=1){
+            if (args.size != 1) {
                 throw JSBotException("Wrong number of arguments")
             }
             val name = when (args[0]) {
@@ -1048,10 +1060,10 @@ class JSBot : TelegramLongPollingBot {
             return@f removeHandler(chatID, name)
         })
 
-        ScriptableObject.putProperty(to, "getHandlers", JSFunction(0) f@{_,_,_,_->
+        ScriptableObject.putProperty(to, "getHandlers", JSFunction(0) f@{ _, _, _, _ ->
             val result = cx.newObject(to)
             val handlers = retrieveHandlers(chatID)
-            handlers.forEach{(name,func)->
+            handlers.forEach { (name, func) ->
                 result.put(name, result, func)
             }
             return@f result
@@ -1065,7 +1077,7 @@ class JSBot : TelegramLongPollingBot {
 
     private fun saveScope(chatId: Long, context: Context, saved: Scriptable) {
         val filename = scopeFileName(chatId)
-        println("Saving Scope $filename")
+        logger.debug("Saving Scope $filename")
 
         PrintWriter(FileOutputStream(filename)).use {
             val source = saved.serialize(context)
