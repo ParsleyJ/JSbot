@@ -20,8 +20,6 @@ public class User extends ScriptableObject {
     }
 
 
-
-
     @Override
     public String getClassName() {
         return "User";

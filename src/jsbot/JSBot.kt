@@ -1,7 +1,6 @@
 package jsbot
 
-import jsbot.jsapi.JSFunction
-import jsbot.jsapi.SimpleMedia
+import jsbot.jsapi.*
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
 import org.mozilla.javascript.*
@@ -638,7 +637,8 @@ class JSBot(
         if (result != null) {
 
             //add JSBot data Classes to scope
-            jsbot.jsapi.UserUtils.addUserClassToScope(cx, result, this, message)
+            this.addUserClassToScope(cx, result, message)
+            this.addStuffToStringProto(cx, result, message)
 
             if (message !== null) {
                 logger.debug("retrieving scope :$scopeID ---: adding message-dependent properties")

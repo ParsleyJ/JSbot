@@ -1,4 +1,4 @@
-package jsbot
+package jsbot.jsapi
 
 /**
  * Created on 23/09/2019.
