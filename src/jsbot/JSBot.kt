@@ -1,8 +1,9 @@
 package jsbot
 
+import jsbot.jsapi.JSFunction
+import jsbot.jsapi.SimpleMedia
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
-import org.json.JSONObject
 import org.mozilla.javascript.*
 import org.mozilla.javascript.Function
 import org.telegram.telegrambots.bots.TelegramLongPollingBot
@@ -22,18 +23,26 @@ import java.io.*
 import kotlin.math.min
 
 
-
 class JSBot(
     public val creator: String,
     public val creatorId: Int,
-    public val scopemap: MutableMap<Long, Scriptable>,// maps chat IDs to the scope reserved to such chats
-    public val usernamesMap: MutableMap<String, Int>, // maps usernames their user IDs
-    public val userRoles: MutableMap<Int, Role>,      // maps user IDs to their Role
     private val username: String,
     private val botToken: String
 ) : TelegramLongPollingBot() {
 
     public val handlersMap: MutableMap<Long, MutableMap<String, Function>> = mutableMapOf()
+    // maps chat IDs to the scope reserved to such chats
+    public val scopemap: MutableMap<Long, Scriptable> = mutableMapOf()
+    // maps usernames their user IDs
+    public val usernamesMap: MutableMap<String, Int> = mutableMapOf()
+    // maps user IDs to their Role
+    public val userRoles: MutableMap<Int, Role> = mutableMapOf()
+
+
+    init {
+        usernamesMap[creator] = creatorId
+        userRoles[creatorId] = Role.Companion.SuperAdmin()
+    }
 
     companion object {
         val logger: Logger = LogManager.getRootLogger()
@@ -197,8 +206,8 @@ class JSBot(
                         }
                     }
 
-                }else if(update.hasEditedMessage()){
-                    
+                } else if (update.hasEditedMessage()) {
+
                 }
             } catch (e: KotlinNullPointerException) {
                 e.printStackTrace()
@@ -628,17 +637,22 @@ class JSBot(
 
         if (result != null) {
 
+            //add JSBot data Classes to scope
+            jsbot.jsapi.UserUtils.addUserClassToScope(cx, result, this, message)
+
             if (message !== null) {
                 logger.debug("retrieving scope :$scopeID ---: adding message-dependent properties")
                 addMessageDependentStuff(cx, result, this, message)
                 logger.debug("retrieving scope :$scopeID ---: adding user-dependent properties, user: ${message.from.id}")
-                addUserStuff(cx, result, message.from.id, message)
+                addUserStuff(cx, result, message.from.id)
             } else {
                 if (scopeID > 0) {
                     logger.debug("retrieving scope :$scopeID ---: adding user-dependent properties (user chat)")
                     addUserStuff(cx, result, scopeID.toInt())
                 }
             }
+
+
 
 
             if (!ScriptableObject.hasProperty(result, "saved")) {
@@ -682,7 +696,7 @@ class JSBot(
     }
 
 
-    private fun addUserStuff(cx: Context, to: Scriptable, userId: Int, jobMessage: Message? = null) {
+    private fun addUserStuff(cx: Context, to: Scriptable, userId: Int) {
 
         // adds the "my" dynamic reference
         ScriptableObject.putProperty(to, "my", scopemap[userId.toLong()] ?: retrieveScope(cx, userId.toLong()))
@@ -761,26 +775,23 @@ class JSBot(
                         } else {
                             throw JSBotException("Unsufficient privileges.")
                         }
-                    } else if (argUser is Scriptable) {
-                        val fromJS = jsbot.User.fromJS(argUser)
-                        if (fromJS !== null) {
-                            if (fromJS.id == creatorId) {
-                                throw JSBotException("Creator's role is immutable.")
-                            }
-                            if (retrievedRole.isChangeRoleAuthorized(
-                                    userRoles[fromJS.id] ?: Role.create(defaultRole)!!,
-                                    createdRole
-                                )
-                            ) {
-                                userRoles[fromJS.id] = createdRole
-                                saveUserRoles()
-                                return@f true
-                            } else {
-                                throw JSBotException("Unsufficient privileges.")
-                            }
-                        } else {
-                            throw JSBotException("Illegal target user argument.")
+                    } else if (argUser is jsbot.jsapi.User) {
+
+                        if (argUser.id == creatorId) {
+                            throw JSBotException("Creator's role is immutable.")
                         }
+                        if (retrievedRole.isChangeRoleAuthorized(
+                                userRoles[argUser.id] ?: Role.create(defaultRole)!!,
+                                createdRole
+                            )
+                        ) {
+                            userRoles[argUser.id] = createdRole
+                            saveUserRoles()
+                            return@f true
+                        } else {
+                            throw JSBotException("Unsufficient privileges.")
+                        }
+
                     } else {
                         throw JSBotException("Illegal target user argument.")
                     }
@@ -825,8 +836,7 @@ class JSBot(
         })
 
         // allows an user (if authorized) to get the user object of any user in bot's db
-        val bot = this
-        ScriptableObject.putProperty(to, "getUser", JSFunction(1) f@{ cx2, _, _, args ->
+        ScriptableObject.putProperty(to, "getUser", JSFunction(1) f@{ cx2, scope2, _, args ->
             if (!retrieveRoleFromId(userId).isAuthorized(Role.USER_DATABASE_READ_ABILITY)) {
                 throw JSBotException("Not authorized to read users database.")
             }
@@ -836,11 +846,11 @@ class JSBot(
                     is String -> {
                         val id = usernamesMap[argument]
                         when {
-                            id !== null -> jsbot.User(id, argument).toJS(cx2, to, bot, jobMessage)
+                            id !== null -> jsbot.jsapi.User().init(id, argument).toJS(cx2,scope2)
                             else -> null
                         }
                     }
-                    is Int -> jsbot.User(argument).toJS(cx2, to, bot, jobMessage)
+                    is Int -> jsbot.jsapi.User().init(argument, null).toJS(cx2, scope2)
                     else -> null
                 }
             } else {
@@ -1014,13 +1024,13 @@ class JSBot(
         ScriptableObject.putProperty(
             to,
             "me",
-            jsbot.User.fromTgUser(message.from)?.toJS(cx, to, this, message)
+            jsbot.jsapi.User.fromTgUser(message.from).toJS(cx, to)
         )
 
         ScriptableObject.putProperty(
             to,
             "thatUser",
-            jsbot.User.fromTgUser(message.replyToMessage?.from)?.toJS(cx, to, this, message)
+            jsbot.jsapi.User.fromTgUser(message.replyToMessage?.from)?.toJS(cx, to)
         )
 
         ScriptableObject.putProperty(to, "putHandler", JSFunction(2) f@{ _, _, _, args ->

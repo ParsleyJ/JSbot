@@ -1,5 +1,7 @@
-package jsbot
+package jsbot.jsapi
 
+import jsbot.JSBot
+import jsbot.serialize
 import org.mozilla.javascript.Context
 import org.mozilla.javascript.Scriptable
 import org.mozilla.javascript.ScriptableObject
@@ -70,11 +72,20 @@ class SimpleMedia(var mediaType: String, var fileID: String) {
         fun fromMessage(msg: Message?): SimpleMedia? {
             return when {
                 msg == null -> null
-                msg.hasAnimation() -> SimpleMedia(ANIMATION, msg.animation.fileId)
+                msg.hasAnimation() -> SimpleMedia(
+                    ANIMATION,
+                    msg.animation.fileId
+                )
                 msg.hasAudio() -> SimpleMedia(AUDIO, msg.audio.fileId)
-                msg.hasDocument() -> SimpleMedia(DOCUMENT, msg.document.fileId)
+                msg.hasDocument() -> SimpleMedia(
+                    DOCUMENT,
+                    msg.document.fileId
+                )
                 msg.hasPhoto() -> SimpleMedia(PHOTO, msg.photo[0].fileId)
-                msg.hasSticker() -> SimpleMedia(STICKER, msg.sticker.fileId)
+                msg.hasSticker() -> SimpleMedia(
+                    STICKER,
+                    msg.sticker.fileId
+                )
                 msg.hasVideo() -> SimpleMedia(VIDEO, msg.video.fileId)
                 msg.hasVoice() -> SimpleMedia(VOICE, msg.voice.fileId)
                 else -> null

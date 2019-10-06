@@ -1,5 +1,6 @@
 package jsbot
 
+import jsbot.jsapi.SimpleMedia
 import org.mozilla.javascript.Context
 import org.mozilla.javascript.Scriptable
 import org.mozilla.javascript.ScriptableObject

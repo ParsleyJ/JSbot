@@ -25,10 +25,6 @@ fun main(args: Array<String>) {
 
     val logger: Logger = LogManager.getRootLogger()
 
-
-
-
-
     val propFile: File
 
 
@@ -80,13 +76,10 @@ fun main(args: Array<String>) {
         logger.debug("Creator = $creatorId:$creator")
 
 
-        val scopemap = mutableMapOf<Long, Scriptable>()
-        val usernamesMap = mutableMapOf<String, Int>()
-        val userRoles = mutableMapOf<Int, Role>()
-        if (creator !== null) {
-            usernamesMap[creator] = creatorId
-            userRoles[creatorId] = Role.Companion.SuperAdmin()
-        }
+
+
+
+
         ApiContextInitializer.init()
 
         val botsApi = TelegramBotsApi()
@@ -95,9 +88,6 @@ fun main(args: Array<String>) {
             val jsbot = JSBot(
                 creator,
                 creatorId,
-                scopemap,
-                usernamesMap,
-                userRoles,
                 username,
                 token
             )

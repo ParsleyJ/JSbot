@@ -1,4 +1,4 @@
-package jsbot
+package jsbot.jsapi
 
 import org.mozilla.javascript.BaseFunction
 import org.mozilla.javascript.Context
@@ -8,7 +8,7 @@ import org.mozilla.javascript.Scriptable
  * Created on 28/09/2019.
  *
  */
-class JSFunction(
+open class JSFunction(
     private val metaArity:Int,
     private val func: (Context, Scriptable, Scriptable, Array<out Any>)-> Any?
 ) : BaseFunction() {
@@ -19,4 +19,6 @@ class JSFunction(
     override fun getArity(): Int {
         return metaArity
     }
+
+    fun classProto() = classPrototype
 }
