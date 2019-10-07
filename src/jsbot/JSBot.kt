@@ -80,7 +80,7 @@ class JSBot(
                     }
 
 
-                    if (message.isUserMessage && message.from.userName !== null) {
+                    if (message.from?.userName !== null) {
                         usernamesMap[message.from.userName] = message.from.id
                     }
 
@@ -129,9 +129,6 @@ class JSBot(
                                     saveScope(message.from.id.toLong(), it, userSaved)
                                 }
                             }
-
-                            saveUsernameMap()
-                            saveUserRoles()
                         }
                     } else if (message.hasMedia()) {
 
@@ -169,10 +166,16 @@ class JSBot(
 
 
                     }
+                    saveUsernameMap()
+                    saveUserRoles()
                 } else if (update.hasInlineQuery()) {
                     val inlineQuery = update.inlineQuery!!
 
                     val from = inlineQuery.from!!
+
+                    if (from.userName !== null) {
+                        usernamesMap[from.userName] = from.id
+                    }
 
                     logger.debug("Query from ${from.id}:${from.userName} --------------")
 
@@ -201,10 +204,12 @@ class JSBot(
                                 saveScope(from.id.toLong(), it, saved)
                             }
 
-                            saveUsernameMap()
-                            saveUserRoles()
+
                         }
                     }
+
+                    saveUsernameMap()
+                    saveUserRoles()
 
                 } else if (update.hasEditedMessage()) {
 
@@ -383,10 +388,10 @@ class JSBot(
                                 if (media !== null) {
                                     replyWithSimpleMedia(media, message)
                                 } else {
-                                    replyWithText(result, message)
+                                    replyWithText(result, message, true)
                                 }
                             } else {
-                                replyWithText(result, message)
+                                replyWithText(result, message, true)
                             }
                         } else {
 
@@ -410,10 +415,10 @@ class JSBot(
                                 if (media !== null) {
                                     replyWithSimpleMedia(media, message)
                                 } else {
-                                    replyWithText(result, message)
+                                    replyWithText(result, message, showError)
                                 }
                             } else {
-                                replyWithText(result, message)
+                                replyWithText(result, message, showError)
                             }
 
                         }
@@ -566,9 +571,26 @@ class JSBot(
     }
 
 
-    private fun replyWithText(result: Any?, message: Message) {
+    private fun replyWithText(result: Any?, message: Message, replyEmptyString: Boolean = false) {
         var textResult = Context.toString(result)
         textResult = if (textResult === null) "" else textResult
+
+
+        if(replyEmptyString && textResult.isBlank()){
+            textResult = "< empty string >"
+        }
+
+        if (textResult.length > 4096) {
+            var lenghtMark = "\n...< message length: ${textResult.length} >..."
+            if (lenghtMark.length > 4096) {
+                lenghtMark = lenghtMark.substring(0, 4095)
+            }
+            textResult = textResult.substring(0, 4095 - lenghtMark.length - 1) + lenghtMark
+        }
+
+        logger.debug("Sending reply with size ${textResult.length}")
+
+
         if (textResult.isNotBlank()) {
             execute(
                 SendMessage()
@@ -628,7 +650,7 @@ class JSBot(
                     ScriptableObject.READONLY or ScriptableObject.PERMANENT or ScriptableObject.DONTENUM
                 )
 
-                if(firstAccess && loadedSavedObject is Scriptable && loadedSavedObject != Undefined.instance) {
+                if (firstAccess && loadedSavedObject is Scriptable && loadedSavedObject != Undefined.instance) {
                     when (val onBoot = loadedSavedObject.get("onBoot", loadedSavedObject)) {
                         is Function -> {
                             try {
@@ -696,7 +718,6 @@ class JSBot(
 
         // gives user acces to its own role name
         val retrievedRole = retrieveRoleFromId(userId)
-        ScriptableObject.putProperty(to, "role", retrievedRole.getRoleName())
 
 
         // adds "java" classpath for authorized people
@@ -799,12 +820,6 @@ class JSBot(
             return@JSFunction false
         })
 
-        // adds a vector of the user's own ability names
-        val abilityList = mutableListOf<Any>()
-        retrievedRole.getAbilites().forEach {
-            abilityList.add(it)
-        }
-        ScriptableObject.putProperty(to, "abilities", cx.newArray(to, abilityList.toTypedArray()))
 
         // allows an user (if authorized) to read from the host's FS
         ScriptableObject.putProperty(to, "readFileFS", JSFunction(1) { _, _, _, args ->
@@ -839,7 +854,7 @@ class JSBot(
                     is String -> {
                         val id = usernamesMap[argument]
                         when {
-                            id !== null -> jsbot.jsapi.User().init(id, argument).toJS(cx2,scope2)
+                            id !== null -> jsbot.jsapi.User().init(id, argument).toJS(cx2, scope2)
                             else -> null
                         }
                     }
@@ -995,7 +1010,7 @@ class JSBot(
 
         //adds the media in the message the user is referring to (or null if not present)
         val referredMedia = message.replyToMessage.toMedia()?.toJS(cx, to)
-        ScriptableObject.putProperty(to, "refMedia", referredMedia)
+        ScriptableObject.putProperty(to, "thatMedia", referredMedia)
 
 
         //adds the text in the message the user is referring to (or null if not present)
@@ -1005,7 +1020,7 @@ class JSBot(
             } else {
                 Context.javaToJS(null, to)
             }
-        ScriptableObject.putProperty(to, "refText", referredText)
+        ScriptableObject.putProperty(to, "thatText", referredText)
 
         if (referredMedia !== null) {
             ScriptableObject.putProperty(to, "that", referredMedia)

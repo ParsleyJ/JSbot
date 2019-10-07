@@ -1,7 +1,9 @@
 package jsbot.jsapi
 
+import jsbot.Emoji
 import jsbot.JSBot
 import jsbot.answerInlineQuery
+import jsbot.toScriptable
 import org.mozilla.javascript.*
 import org.telegram.telegrambots.meta.api.methods.AnswerInlineQuery
 import org.telegram.telegrambots.meta.api.methods.send.*
@@ -45,9 +47,20 @@ fun JSBot.addStuffToStringProto(
                 throw JSBot.JSBotException("Message limit reached.")
             }
         }, ScriptableObject.DONTENUM)
+
+
     } else {
         ScriptableObject.defineProperty(stringProto, "send", Undefined.instance, ScriptableObject.DONTENUM)
     }
+
+
+    ScriptableObject.defineProperty(stringProto, "findEmojis", JSFunction(0) { cx2, scope2, thisObj, _ ->
+            return@JSFunction when (val argument = Context.jsToJava(thisObj, String::class.java)) {
+                is String -> Emoji.findEmoji(argument).toScriptable(cx2, scope2)
+                else -> null
+            }
+    },
+    ScriptableObject.DONTENUM)
 }
 
 
