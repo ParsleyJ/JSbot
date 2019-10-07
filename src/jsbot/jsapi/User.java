@@ -26,6 +26,7 @@ public class User extends ScriptableObject {
     }
 
 
+    @SuppressWarnings("unused")
     public static User jsConstructor(Context cx, Object[] args, Function ctorObj, boolean inNewExpr) {
         if (inNewExpr) {
 
@@ -45,9 +46,10 @@ public class User extends ScriptableObject {
 
             if (args.length > 1) {
                 Object unArg = args[1];
-                if(unArg instanceof String){
+
+                if (unArg instanceof String) {
                     result.username = ((String) unArg);
-                }else{
+                } else if (unArg != null) {
                     throw new JSBot.JSBotException("Invalid username argument type");
                 }
 
@@ -57,24 +59,27 @@ public class User extends ScriptableObject {
         return null;
     }
 
-    public String jsFunction_toSource(){
-        return "new User("+id+", '"+username+"')";
+    @SuppressWarnings("unused")
+    public String jsFunction_toSource() {
+        return "new User(" + id + ", '" + username + "')";
     }
 
-    public Integer jsGet_id(){
+    @SuppressWarnings("unused")
+    public Integer jsGet_id() {
         return id;
     }
 
-    public String jsGet_username(){
+    @SuppressWarnings("unused")
+    public String jsGet_username() {
         return username;
     }
 
-    public Scriptable toJS(Context cx, Scriptable scope){
+    public Scriptable toJS(Context cx, Scriptable scope) {
         return cx.newObject(scope, "User", new Object[]{id, username});
     }
 
-    public static User fromTgUser(org.telegram.telegrambots.meta.api.objects.User tgUser){
-        if(tgUser == null) return null;
+    public static User fromTgUser(org.telegram.telegrambots.meta.api.objects.User tgUser) {
+        if (tgUser == null) return null;
         User result = new User();
         result.id = tgUser.getId();
         result.username = tgUser.getUserName();
@@ -89,10 +94,11 @@ public class User extends ScriptableObject {
         return username;
     }
 
-    public User init(Integer id, String username){
+    public User init(Integer id, String username) {
         this.id = id;
         this.username = username;
         return this;
     }
+
 
 }

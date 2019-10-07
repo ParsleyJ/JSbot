@@ -55,6 +55,7 @@ fun main(args: Array<String>) {
 
 
 
+
     Emoji.loadEmojis("$propertyFileDirectory/emojis.json")
 
     if(Emoji.isEmojiLoaded()) {
@@ -86,6 +87,7 @@ fun main(args: Array<String>) {
         try {
 
             val jsbot = JSBot(
+                propertyFileDirectory,
                 creator,
                 creatorId,
                 username,

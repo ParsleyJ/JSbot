@@ -1,16 +1,30 @@
 package jsbot.jsapi
 
 import jsbot.JSBot
+import jsbot.answerInlineQuery
 import org.mozilla.javascript.*
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage
+import org.telegram.telegrambots.meta.api.methods.AnswerInlineQuery
+import org.telegram.telegrambots.meta.api.methods.send.*
 import org.telegram.telegrambots.meta.api.objects.Message
+import org.telegram.telegrambots.meta.api.objects.inlinequery.InlineQuery
+import org.telegram.telegrambots.meta.api.objects.inlinequery.result.cached.*
 
 /**
  * Created on 24/09/2019.
  *
  */
+fun JSBot.addJSBotAPI(
+    scope: Scriptable,
+    jobMessage: Message? = null
+) {
+    this.addStuffToStringProto(scope, jobMessage)
+    this.addMediaClassToScope(scope)
+    this.addEventClassToScope(scope)
+    this.addUserClassToScope(scope, jobMessage)
+}
+
+
 fun JSBot.addStuffToStringProto(
-    cx: Context,
     scope: Scriptable,
     jobMessage: Message? = null
 ) {
@@ -18,7 +32,7 @@ fun JSBot.addStuffToStringProto(
     if (jobMessage != null) {
         var remaining = 10
         ScriptableObject.defineProperty(stringProto, "send", JSFunction(1) { _, _, thisObj, _ ->
-            if(remaining>0) {
+            if (remaining > 0) {
                 execute(
                     SendMessage()
                         .setChatId(jobMessage.chatId)
@@ -27,7 +41,7 @@ fun JSBot.addStuffToStringProto(
                 )
                 remaining--
                 return@JSFunction ""
-            }else{
+            } else {
                 throw JSBot.JSBotException("Message limit reached.")
             }
         }, ScriptableObject.DONTENUM)
@@ -38,7 +52,6 @@ fun JSBot.addStuffToStringProto(
 
 
 fun JSBot.addUserClassToScope(
-    cx: Context,
     scope: Scriptable,
     jobMessage: Message? = null
 ) {
@@ -139,15 +152,14 @@ fun JSBot.addUserClassToScope(
             if (args.isNotEmpty() && remaining > 0) {
                 val argument = args[0]
                 if (argument is Scriptable) {
-                    val media = SimpleMedia.fromJS(argument)
+                    val media = Media.fromJS(argument)
                     if (media !== null) {
                         execute(
                             SendMessage()
                                 .setChatId(fromJS.id.toLong())
                                 .setText("From: " + (jobMessage.from.userName ?: jobMessage.from.id))
                         )
-                        SimpleMedia.send(
-                            media,
+                        media.send(
                             fromJS.id.toLong(),
                             this
                         )
@@ -169,3 +181,119 @@ fun JSBot.addUserClassToScope(
         ScriptableObject.defineProperty(userProto, "sendMedia", null, ScriptableObject.DONTENUM)
     }
 }
+
+
+fun JSBot.addEventClassToScope(
+    scope: Scriptable
+) {
+    ScriptableObject.defineClass(scope, Event::class.java)
+}
+
+fun JSBot.addMediaClassToScope(
+    scope: Scriptable
+) {
+    ScriptableObject.defineClass(scope, Media::class.java)
+}
+
+fun Message?.toMedia(): Media? {
+    return when {
+        this == null -> null
+        hasAnimation() -> Media().init(Media.ANIMATION, animation.fileId)
+        hasAudio() -> Media().init(Media.AUDIO, audio.fileId)
+        hasDocument() -> Media().init(Media.DOCUMENT, document.fileId)
+        hasPhoto() -> Media().init(Media.PHOTO, photo[0].fileId)
+        hasSticker() -> Media().init(Media.STICKER, sticker.fileId)
+        hasVideo() -> Media().init(Media.VIDEO, video.fileId)
+        hasVoice() -> Media().init(Media.VOICE, voice.fileId)
+        else -> null
+    }
+}
+
+fun Media?.send(chatID: Long, bot: JSBot, withText: String? = null) {
+    if (this == null) {
+        val send = SendMessage()
+            .setText("null")
+            .setChatId(chatID)
+            .disableNotification()
+        if (withText !== null) {
+            send.text = withText
+        }
+        bot.execute(send)
+        return
+    }
+    val fileID = fileID
+
+    when (mediaType) {
+        Media.ANIMATION -> bot.execute(SendAnimation().setAnimation(fileID).setChatId(chatID).disableNotification())
+        Media.AUDIO -> bot.execute(SendAudio().setAudio(fileID).setChatId(chatID).disableNotification())
+        Media.DOCUMENT -> bot.execute(SendDocument().setDocument(fileID).setChatId(chatID).disableNotification())
+        Media.PHOTO -> bot.execute(SendPhoto().setPhoto(fileID).setChatId(chatID).disableNotification())
+        Media.STICKER -> bot.execute(SendSticker().setSticker(fileID).setChatId(chatID).disableNotification())
+        Media.VIDEO -> bot.execute(SendVideo().setVideo(fileID).setChatId(chatID).disableNotification())
+        Media.VOICE -> bot.execute(SendVoice().setVoice(fileID).setChatId(chatID).disableNotification())
+    }
+}
+
+
+fun Media?.giveInlineQueryResult(
+    command: String,
+    inlineQuery: InlineQuery,
+    bot: JSBot,
+    withText: String? = null
+) {
+    if (this == null) {
+        bot.execute(
+            if (withText !== null) {
+                inlineQuery.answerInlineQuery(command, withText)
+            } else {
+                inlineQuery.answerInlineQuery(command, "null")
+            }
+        )
+        return
+    }
+    val fileID = fileID
+
+    val queryId = inlineQuery.id
+
+    when (mediaType) {
+        Media.ANIMATION -> bot.execute(
+            AnswerInlineQuery().setInlineQueryId(queryId).setResults(
+                InlineQueryResultCachedGif().setGifFileId(fileID).setId(queryId)
+            )
+        )
+        Media.AUDIO -> bot.execute(
+            AnswerInlineQuery().setInlineQueryId(queryId).setResults(
+                InlineQueryResultCachedAudio().setAudioFileId(fileID).setId(queryId)
+            )
+        )
+        Media.DOCUMENT -> bot.execute(
+            AnswerInlineQuery().setInlineQueryId(queryId).setResults(
+                InlineQueryResultCachedDocument().setDocumentFileId(fileID).setId(queryId)
+            )
+        )
+        Media.PHOTO -> bot.execute(
+            AnswerInlineQuery().setInlineQueryId(queryId).setResults(
+                InlineQueryResultCachedPhoto().setPhotoFileId(fileID).setId(queryId)
+            )
+        )
+        Media.STICKER -> bot.execute(
+            AnswerInlineQuery().setInlineQueryId(queryId).setResults(
+                InlineQueryResultCachedSticker().setStickerFileId(fileID).setId(queryId)
+            )
+        )
+        Media.VIDEO -> bot.execute(
+            AnswerInlineQuery().setInlineQueryId(queryId).setResults(
+                InlineQueryResultCachedVideo().setVideoFileId(fileID).setId(queryId)
+            )
+        )
+        Media.VOICE -> bot.execute(
+            AnswerInlineQuery().setInlineQueryId(queryId).setResults(
+                InlineQueryResultCachedVoice().setVoiceFileId(fileID).setId(queryId)
+            )
+        )
+    }
+
+}
+
+
+

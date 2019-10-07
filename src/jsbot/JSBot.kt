@@ -23,19 +23,20 @@ import kotlin.math.min
 
 
 class JSBot(
-    public val creator: String,
-    public val creatorId: Int,
+    private val workDir: String,
+    private val creator: String,
+    private val creatorId: Int,
     private val username: String,
     private val botToken: String
 ) : TelegramLongPollingBot() {
 
-    public val handlersMap: MutableMap<Long, MutableMap<String, Function>> = mutableMapOf()
+    private val handlersMap: MutableMap<Long, MutableMap<String, Function>> = mutableMapOf()
     // maps chat IDs to the scope reserved to such chats
-    public val scopemap: MutableMap<Long, Scriptable> = mutableMapOf()
+    private val scopemap: MutableMap<Long, Scriptable> = mutableMapOf()
     // maps usernames their user IDs
-    public val usernamesMap: MutableMap<String, Int> = mutableMapOf()
+    private val usernamesMap: MutableMap<String, Int> = mutableMapOf()
     // maps user IDs to their Role
-    public val userRoles: MutableMap<Int, Role> = mutableMapOf()
+    val userRoles: MutableMap<Int, Role> = mutableMapOf()
 
 
     init {
@@ -97,7 +98,7 @@ class JSBot(
                             if (!isNoev) {
                                 blockEvaluation = handleEventInTime(
                                     scope,
-                                    Event(Event.TEXT_MESSAGE_EVENT_TYPE, text),
+                                    Event().init(Event.TEXT_MESSAGE_EVENT_TYPE, text),
                                     message,
                                     3
                                 )
@@ -132,9 +133,9 @@ class JSBot(
                             saveUsernameMap()
                             saveUserRoles()
                         }
-                    } else if (SimpleMedia.hasMedia(message)) {
+                    } else if (message.hasMedia()) {
 
-                        val m = SimpleMedia.fromMessage(message)!!
+                        val m = message.toMedia()!!
                         logger.debug("Media: { mediaType:\"${m.mediaType}\", fileID:\"${m.fileID}\" }")
 
                         val scope = retrieveScope(it, message.chatId, message)!!
@@ -142,7 +143,7 @@ class JSBot(
 
                         handleEventInTime(
                             scope,
-                            Event(Event.MEDIA_MESSAGE_EVENT_TYPE, m),
+                            Event().init(Event.MEDIA_MESSAGE_EVENT_TYPE, m),
                             message,
                             3
                         )
@@ -305,9 +306,9 @@ class JSBot(
 
 
                         if (result is Scriptable) {
-                            val media = SimpleMedia.fromJS(result)
+                            val media = Media.fromJS(result)
                             if (media !== null) {
-                                SimpleMedia.giveInlineQueryResult(text, media, inlineQuery, this)
+                                media.giveInlineQueryResult(text, inlineQuery, this)
                             } else {
                                 inlineQueryTextResult(text, result, inlineQuery)
                             }
@@ -378,7 +379,7 @@ class JSBot(
                             }
 
                             if (result is Scriptable) {
-                                val media = SimpleMedia.fromJS(result)
+                                val media = Media.fromJS(result)
                                 if (media !== null) {
                                     replyWithSimpleMedia(media, message)
                                 } else {
@@ -405,7 +406,7 @@ class JSBot(
                             }
 
                             if (result is Scriptable) {
-                                val media = SimpleMedia.fromJS(result)
+                                val media = Media.fromJS(result)
                                 if (media !== null) {
                                     replyWithSimpleMedia(media, message)
                                 } else {
@@ -438,7 +439,7 @@ class JSBot(
 
     private fun saveUsernameMap() {
         logger.debug("save usernames, size:${usernamesMap.size}")
-        val fileout = File("userchats.jsbot")
+        val fileout = File("$workDir/userchats.jsbot")
         fileout.bufferedWriter().use {
             usernamesMap.forEach { (userName, userId) ->
                 it.append("$userName $userId")
@@ -449,7 +450,7 @@ class JSBot(
 
 
     fun loadUsernames() {
-        val filein = File("userchats.jsbot")
+        val filein = File("$workDir/userchats.jsbot")
         if (filein.exists() && filein.isFile) {
             filein.bufferedReader().useLines {
                 it.forEach { line ->
@@ -469,7 +470,7 @@ class JSBot(
 
     private fun saveUserRoles() {
         logger.debug("save user roles, size:${userRoles.size}")
-        val fileout = File("userroles.jsbot")
+        val fileout = File("$workDir/userroles.jsbot")
         fileout.bufferedWriter().use {
             userRoles.forEach { (userId, role) ->
                 it.append("$userId ${role.getRoleName()}")
@@ -480,7 +481,7 @@ class JSBot(
 
 
     fun loadUserRoles() {
-        val filein = File("userroles.jsbot")
+        val filein = File("$workDir/userroles.jsbot")
         if (filein.exists() && filein.isFile) {
             filein.bufferedReader().useLines {
                 it.forEach { line ->
@@ -580,65 +581,29 @@ class JSBot(
     }
 
 
-    private fun replyWithSimpleMedia(media: SimpleMedia?, message: Message) {
-        SimpleMedia.send(media, message.chatId, this)
+    private fun replyWithSimpleMedia(media: Media?, message: Message) {
+        media.send(message.chatId, this)
     }
 
 
     fun retrieveScope(cx: Context, scopeID: Long, message: Message? = null): Scriptable? {
 
+        val firstAccess: Boolean
         logger.debug("retrieving scope :$scopeID")
         val result = if (scopemap.containsKey(scopeID)) {
+            firstAccess = false
             scopemap[scopeID]
         } else {
             val scope = cx.initSafeStandardObjects()
-
-            val file = File(scopeFileName(scopeID))
-            if (file.exists() && file.isFile) {
-                val loadedScope = loadScope(scopeID, cx, cx.newObject(scope))
-                ScriptableObject.defineProperty(
-                    scope,
-                    "saved",
-                    loadedScope,
-                    ScriptableObject.READONLY or ScriptableObject.PERMANENT or ScriptableObject.DONTENUM
-                )
-
-                if (loadedScope is Scriptable && loadedScope != Undefined.instance) {
-                    when (val onBoot = loadedScope.get("onBoot", loadedScope)) {
-                        is Function -> {
-                            try {
-                                val onBootResult = onBoot.call(cx, scope, scope, arrayOf(loadedScope))
-                                execute(SendMessage().setText(Context.toString(onBootResult)).setChatId(scopeID).disableNotification())
-                            } catch (e: Throwable) {
-                                e.printStackTrace()
-                            }
-                        }
-                        is String -> try {
-                            execute(SendMessage().setText(onBoot).setChatId(scopeID).disableNotification())
-                        } catch (e: Throwable) {
-                            e.printStackTrace()
-                        }
-                    }
-                }
-                //TODO: invoke autoload?
-            } else {
-                ScriptableObject.defineProperty(
-                    scope,
-                    "saved",
-                    cx.newObject(scope),
-                    ScriptableObject.READONLY or ScriptableObject.PERMANENT or ScriptableObject.DONTENUM
-                )
-            }
-
             scopemap[scopeID] = scope
+            firstAccess = true
             scope
         }
 
         if (result != null) {
 
             //add JSBot data Classes to scope
-            this.addUserClassToScope(cx, result, message)
-            this.addStuffToStringProto(cx, result, message)
+            this.addJSBotAPI(result, message)
 
             if (message !== null) {
                 logger.debug("retrieving scope :$scopeID ---: adding message-dependent properties")
@@ -653,6 +618,34 @@ class JSBot(
             }
 
 
+            val file = File(scopeFileName(scopeID))
+            if (file.exists() && file.isFile) {
+                val loadedSavedObject = loadScope(scopeID, cx, cx.newObject(result))
+                ScriptableObject.defineProperty(
+                    result,
+                    "saved",
+                    loadedSavedObject,
+                    ScriptableObject.READONLY or ScriptableObject.PERMANENT or ScriptableObject.DONTENUM
+                )
+
+                if(firstAccess && loadedSavedObject is Scriptable && loadedSavedObject != Undefined.instance) {
+                    when (val onBoot = loadedSavedObject.get("onBoot", loadedSavedObject)) {
+                        is Function -> {
+                            try {
+                                val onBootResult = onBoot.call(cx, result, result, arrayOf(loadedSavedObject))
+                                execute(SendMessage().setText(Context.toString(onBootResult)).setChatId(scopeID).disableNotification())
+                            } catch (e: Throwable) {
+                                e.printStackTrace()
+                            }
+                        }
+                        is String -> try {
+                            execute(SendMessage().setText(onBoot).setChatId(scopeID).disableNotification())
+                        } catch (e: Throwable) {
+                            e.printStackTrace()
+                        }
+                    }
+                }
+            }
 
 
             if (!ScriptableObject.hasProperty(result, "saved")) {
@@ -723,7 +716,7 @@ class JSBot(
 
         // adds ability to set other people's roles
         var remainingRole = 1
-        ScriptableObject.putProperty(to, "setRole", JSFunction(2) f@{ _, _, _, args ->
+        ScriptableObject.putProperty(to, "setRole", JSFunction(2) { _, _, _, args ->
             if (!retrievedRole.isAuthorized(Role.SET_ROLES_ABILITY)) {
                 throw JSBotException("Not authorized to set role.")
             }
@@ -734,7 +727,7 @@ class JSBot(
                     val createdRole = Role.create(argumentRole)
 
                     if (createdRole === null) {
-                        return@f false
+                        return@JSFunction false
                     }
 
                     val argUser = args[0]
@@ -752,7 +745,7 @@ class JSBot(
                             ) {
                                 userRoles[id] = createdRole
                                 saveUserRoles()
-                                return@f true
+                                return@JSFunction true
                             } else {
                                 throw JSBotException("Unsufficient privileges.")
                             }
@@ -771,7 +764,7 @@ class JSBot(
                         ) {
                             userRoles[argUser.toInt()] = createdRole
                             saveUserRoles()
-                            return@f true
+                            return@JSFunction true
                         } else {
                             throw JSBotException("Unsufficient privileges.")
                         }
@@ -787,7 +780,7 @@ class JSBot(
                         ) {
                             userRoles[argUser.id] = createdRole
                             saveUserRoles()
-                            return@f true
+                            return@JSFunction true
                         } else {
                             throw JSBotException("Unsufficient privileges.")
                         }
@@ -803,7 +796,7 @@ class JSBot(
             } else if (remainingRole <= 0) {
                 throw JSBotException("Operation limit reached.")
             }
-            return@f false
+            return@JSFunction false
         })
 
         // adds a vector of the user's own ability names
@@ -814,7 +807,7 @@ class JSBot(
         ScriptableObject.putProperty(to, "abilities", cx.newArray(to, abilityList.toTypedArray()))
 
         // allows an user (if authorized) to read from the host's FS
-        ScriptableObject.putProperty(to, "readFileFS", JSFunction(1) f@{ _, _, _, args ->
+        ScriptableObject.putProperty(to, "readFileFS", JSFunction(1) { _, _, _, args ->
             if (!retrieveRoleFromId(userId).isAuthorized(Role.LOAD_FILE_ABILITY)) {
                 throw JSBotException("Not authorized to load files from server disk.")
             }
@@ -823,12 +816,12 @@ class JSBot(
                 if (text === null || text.isEmpty()) {
                     throw JSBotException("Invalid filename")
                 }
-                val file = File(text)
+                val file = File("$workDir/$text")
                 if (!file.exists() || !file.isFile) {
                     throw JSBotException("File not found or not a file")
                 }
 
-                return@f file.readText()
+                return@JSFunction file.readText()
             } else {
                 throw JSBotException("Missing argument")
             }
@@ -836,13 +829,13 @@ class JSBot(
         })
 
         // allows an user (if authorized) to get the user object of any user in bot's db
-        ScriptableObject.putProperty(to, "getUser", JSFunction(1) f@{ cx2, scope2, _, args ->
+        ScriptableObject.putProperty(to, "getUser", JSFunction(1) { cx2, scope2, _, args ->
             if (!retrieveRoleFromId(userId).isAuthorized(Role.USER_DATABASE_READ_ABILITY)) {
                 throw JSBotException("Not authorized to read users database.")
             }
             if (args.isNotEmpty()) {
                 val argument = args[0]
-                return@f when (argument) {
+                return@JSFunction when (argument) {
                     is String -> {
                         val id = usernamesMap[argument]
                         when {
@@ -859,9 +852,9 @@ class JSBot(
         })
 
         if (Emoji.isEmojiLoaded()) {
-            ScriptableObject.putProperty(to, "findEmoji", JSFunction(1) f@{ cx2, scope, _, args ->
+            ScriptableObject.putProperty(to, "findEmoji", JSFunction(1) { cx2, scope, _, args ->
                 if (args.isNotEmpty()) {
-                    return@f when (val argument = args[0]) {
+                    return@JSFunction when (val argument = args[0]) {
                         is String -> Emoji.findEmoji(argument).toScriptable(cx2, scope)
                         else -> null
                     }
@@ -881,7 +874,7 @@ class JSBot(
 
         //adds the message function to the scope
         //defines native "message" function
-        ScriptableObject.putProperty(to, "message", JSFunction(1) f@{ _, _, _, args ->
+        ScriptableObject.putProperty(to, "message", JSFunction(1) { _, _, _, args ->
             if (args.isNotEmpty() && remaining > 0) {
                 var text = Context.toString(args[0])
                 text = if (text === null || text.isEmpty()) "_" else text
@@ -895,12 +888,12 @@ class JSBot(
             } else if (remaining <= 0) {
                 throw JSBotException("Message limit reached.")
             }
-            return@f ""
+            return@JSFunction ""
 
         })
 
         //defines native "message" function with markdown formatting
-        ScriptableObject.putProperty(to, "mdMessage", JSFunction(1) f@{ _, _, _, args ->
+        ScriptableObject.putProperty(to, "mdMessage", JSFunction(1) { _, _, _, args ->
             if (args.isNotEmpty() && remaining > 0) {
                 var text = Context.toString(args[0])
                 text = if (text === null || text.isEmpty()) "_" else text
@@ -915,12 +908,12 @@ class JSBot(
             } else if (remaining <= 0) {
                 throw JSBotException("Message limit reached.")
             }
-            return@f ""
+            return@JSFunction ""
 
         })
 
         //defines native "message" function with html formatting
-        ScriptableObject.putProperty(to, "htmlMessage", JSFunction(1) f@{ _, _, _, args ->
+        ScriptableObject.putProperty(to, "htmlMessage", JSFunction(1) { _, _, _, args ->
             if (args.isNotEmpty() && remaining > 0) {
                 var text = Context.toString(args[0])
                 text = if (text === null || text.isEmpty()) "_" else text
@@ -935,29 +928,29 @@ class JSBot(
             } else if (remaining <= 0) {
                 throw JSBotException("Message limit reached.")
             }
-            return@f ""
+            return@JSFunction ""
 
         })
 
         //adds the sendMedia function to the scope
-        ScriptableObject.putProperty(to, "sendMedia", JSFunction(1) f@{ _, _, _, args ->
+        ScriptableObject.putProperty(to, "sendMedia", JSFunction(1) { _, _, _, args ->
             if (args.isNotEmpty() && remaining > 0) {
                 val argument = args[0]
                 if (argument is Scriptable) {
-                    val media = SimpleMedia.fromJS(argument)
+                    val media = Media.fromJS(argument)
                     if (media !== null) {
-                        SimpleMedia.send(media, chatID, bot)
+                        media.send(chatID, bot)
                         --remaining
                     }
                 }
             } else if (remaining <= 0) {
                 throw JSBotException("Message limit reached.")
             }
-            return@f ""
+            return@JSFunction ""
         })
 
 
-        ScriptableObject.putProperty(to, "toFile", JSFunction(2) f@{ _, scope, _, args ->
+        ScriptableObject.putProperty(to, "toFile", JSFunction(2) { _, scope, _, args ->
             if (args.isEmpty() || args.size > 2) {
                 throw JSBotException("Wrong number of arguments")
             } else {
@@ -968,27 +961,26 @@ class JSBot(
                     else -> "file"
                 }
 
-                SimpleMedia.generateAndSendFileForObject(
+                args[0].serializeToFileAndSend(
                     name,
-                    args[0],
                     bot,
                     chatID,
                     cx,
                     scope
                 )
-                return@f ""
+                return@JSFunction ""
             }
         })
 
 
-        ScriptableObject.putProperty(to, "readFile", JSFunction(1) f@{ _, _, _, args ->
+        ScriptableObject.putProperty(to, "readFile", JSFunction(1) { _, _, _, args ->
             if (args.isNotEmpty() && remaining > 0) {
                 val argument = args[0]
 
                 if (argument is Scriptable) {
-                    val fromJS = SimpleMedia.fromJS(argument)
-                    if (fromJS !== null && fromJS.mediaType == SimpleMedia.DOCUMENT) {
-                        return@f fromJS.getDocumentContents(bot)
+                    val fromJS = Media.fromJS(argument)
+                    if (fromJS !== null && fromJS.mediaType == Media.DOCUMENT) {
+                        return@JSFunction fromJS.getDocumentContents(bot)
                     }
                 }
 
@@ -1002,7 +994,7 @@ class JSBot(
 
 
         //adds the media in the message the user is referring to (or null if not present)
-        val referredMedia = SimpleMedia.fromMessage(message.replyToMessage)?.toJS(cx, to)
+        val referredMedia = message.replyToMessage.toMedia()?.toJS(cx, to)
         ScriptableObject.putProperty(to, "refMedia", referredMedia)
 
 
@@ -1033,7 +1025,7 @@ class JSBot(
             jsbot.jsapi.User.fromTgUser(message.replyToMessage?.from)?.toJS(cx, to)
         )
 
-        ScriptableObject.putProperty(to, "putHandler", JSFunction(2) f@{ _, _, _, args ->
+        ScriptableObject.putProperty(to, "putHandler", JSFunction(2) { _, _, _, args ->
             if (!retrieveRoleFromUser(message.from).isAuthorized(Role.CHANGE_HANDLERS_ABILITY)) {
                 throw JSBotException("Not authorized to modify handlers.")
             }
@@ -1051,11 +1043,11 @@ class JSBot(
                     else -> throw JSBotException("Second argument must be function.")
                 }
 
-                return@f putHandler(chatID, name, func)
+                return@JSFunction putHandler(chatID, name, func)
             }
         })
 
-        ScriptableObject.putProperty(to, "removeHandler", JSFunction(1) f@{ _, _, _, args ->
+        ScriptableObject.putProperty(to, "removeHandler", JSFunction(1) { _, _, _, args ->
             if (!retrieveRoleFromUser(message.from).isAuthorized(Role.CHANGE_HANDLERS_ABILITY)) {
                 throw JSBotException("Not authorized to modify handlers.")
             }
@@ -1067,22 +1059,22 @@ class JSBot(
                 else -> throw JSBotException("Invalid handler name.")
             }
 
-            return@f removeHandler(chatID, name)
+            return@JSFunction removeHandler(chatID, name)
         })
 
-        ScriptableObject.putProperty(to, "getHandlers", JSFunction(0) f@{ _, _, _, _ ->
+        ScriptableObject.putProperty(to, "getHandlers", JSFunction(0) { _, _, _, _ ->
             val result = cx.newObject(to)
             val handlers = retrieveHandlers(chatID)
             handlers.forEach { (name, func) ->
                 result.put(name, result, func)
             }
-            return@f result
+            return@JSFunction result
         })
 
     }
 
 
-    private fun scopeFileName(chatId: Long) = "scope$chatId.js"
+    private fun scopeFileName(chatId: Long) = "$workDir/scope$chatId.js"
 
 
     private fun saveScope(chatId: Long, context: Context, saved: Scriptable) {
@@ -1120,6 +1112,7 @@ construct for portions of code with specific contexts.
  */
     private fun withContext(x: (ctx: Context) -> Unit) {
         val ctx = Context.enter()
+        ctx.languageVersion = Context.VERSION_ES6
         ctx.optimizationLevel = -1
         try {
             x.invoke(ctx)
