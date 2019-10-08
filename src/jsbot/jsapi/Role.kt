@@ -29,16 +29,18 @@ interface Role {
         const val ADMIN_ROLE = "ADMIN"
         const val SUPER_ADMIN_ROLE = "SUPER_ADMIN"
 
-        const val PRIVATE_USE_BOT_ABILITY = "PRIVATE_USE_BOT_ABILITY"
-        const val GROUP_USE_BOT_ABILITY = "GROUP_USE_BOT_ABILITY"
-        const val PANIC_ABILITY = "PANIC_ABILITY"
-        const val SET_ROLES_ABILITY = "SET_ROLES_ABILITY"
-        const val JAVA_ABILITY = "JAVA_ABILITY"
-        const val BOT_ACCESS_ABILITY = "BOT_ACCESS_ABILITY"
-        const val LOAD_FILE_ABILITY = "LOAD_FILE_ABILITY"
-        const val USER_DATABASE_READ_ABILITY = "USER_DATABASE_READ_ABILITY"
-        const val PRIVATE_MESSAGING_ABILITY = "PRIVATE_MESSAGING_ABILITY"
-        const val CHANGE_HANDLERS_ABILITY = "CHANGE_HANDLERS_ABILITY"
+        const val PRIVATE_USE_BOT_ABILITY = "PRIVATE_USE_BOT"
+        const val GROUP_USE_BOT_ABILITY = "GROUP_USE_BOT"
+        const val PANIC_ABILITY = "PANIC"
+        const val SET_ROLES_ABILITY = "SET_ROLES"
+        const val JAVA_ABILITY = "JAVA"
+        const val BOT_ACCESS_ABILITY = "BOT_ACCESS"
+        const val LOAD_FILE_ABILITY = "LOAD_FILE"
+        const val USER_DATABASE_READ_ABILITY = "USER_DATABASE_READ"
+        const val PRIVATE_MESSAGING_ABILITY = "PRIVATE_MESSAGING"
+        const val CHANGE_HANDLERS_ABILITY = "CHANGE_HANDLERS"
+        const val TAMPER_MESSAGES_ABILITY = "TAMPER_MESSAGES"
+
 
         fun create(roletype: String) = when (roletype) {
             NOT_AUTHORIZED_ROLE -> NotAuthorized()
@@ -93,7 +95,8 @@ interface Role {
         open class Admin : Moderator() {
             override fun getRoleName() = ADMIN_ROLE
             override fun getAbilites() = super.getAbilites() + setOf(
-                CHANGE_HANDLERS_ABILITY
+                CHANGE_HANDLERS_ABILITY,
+                TAMPER_MESSAGES_ABILITY
             )
 
             override fun getValue() = super.getValue() + 1

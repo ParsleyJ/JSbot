@@ -101,4 +101,20 @@ public class User extends ScriptableObject {
     }
 
 
+    public static User fromJS(Scriptable obj) {
+        if(obj instanceof User){
+            return ((User) obj);
+        }
+
+        Object id = obj.get("id", obj);
+        Object un = obj.get("username", obj);
+        if (id instanceof Integer) {
+            return new User().init(((Integer) id), Context.toString(un));
+        } else {
+            return null;
+        }
+    }
+
+
+
 }

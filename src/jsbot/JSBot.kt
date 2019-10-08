@@ -56,6 +56,9 @@ class JSBot(
     override fun onUpdateReceived(update: Update?) {
         withContext wc@{
             try {
+                logger.debug("=".repeat(80))
+                logger.debug("=".repeat(80))
+                logger.debug("=".repeat(80))
                 update!!
                 if (update.hasMessage()) {
                     val message = update.message!!
@@ -297,10 +300,7 @@ class JSBot(
         val invokeAll = executor.invokeAll(
             mutableListOf(Callable {
                 withContext { it2 ->
-
-
                     try {
-
 
                         val result: Any? = try {
                             it2.evaluateString(scope, text, "<cmd>", 1, null)
@@ -773,8 +773,8 @@ class JSBot(
                         }
 
                         throw JSBotException("Illegal target user argument.")
-                    } else if (argUser is Int) {
-                        if (argUser == creatorId) {
+                    } else if (argUser is Number) {
+                        if (argUser.toInt() == creatorId) {
                             throw JSBotException("Creator's role is immutable.")
                         }
                         remainingRole--
@@ -849,8 +849,7 @@ class JSBot(
                 throw JSBotException("Not authorized to read users database.")
             }
             if (args.isNotEmpty()) {
-                val argument = args[0]
-                return@JSFunction when (argument) {
+                return@JSFunction when (val argument = args[0]) {
                     is String -> {
                         val id = usernamesMap[argument]
                         when {
@@ -858,7 +857,7 @@ class JSBot(
                             else -> null
                         }
                     }
-                    is Int -> jsbot.jsapi.User().init(argument, null).toJS(cx2, scope2)
+                    is Number -> jsbot.jsapi.User().init(argument.toInt(), null).toJS(cx2, scope2)
                     else -> null
                 }
             } else {
@@ -1027,6 +1026,19 @@ class JSBot(
         } else {
             ScriptableObject.putProperty(to, "that", referredText)
         }
+
+        val referredMessage = if(message.replyToMessage !== null){
+            jsbot.jsapi.Message.fromTgMessage(message.replyToMessage).toJS(cx, to)
+        }else{
+            null
+        }
+        ScriptableObject.putProperty(to, "thatMessage", referredMessage)
+
+
+        val thisMessage = jsbot.jsapi.Message.fromTgMessage(message).toJS(cx, to)
+        ScriptableObject.putProperty(to, "thisMessage", thisMessage)
+
+
 
         ScriptableObject.putProperty(
             to,

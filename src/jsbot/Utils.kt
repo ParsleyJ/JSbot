@@ -1,6 +1,7 @@
 package jsbot
 
 import jsbot.jsapi.Event
+import jsbot.jsapi.Media
 import jsbot.jsapi.User
 import org.json.JSONObject
 import org.mozilla.javascript.Context
@@ -107,4 +108,12 @@ fun Any.serializeToFileAndSend(
     } else {
         generateAndSendFile(name, jscontents.toString(), bot, chatID)
     }
+}
+
+fun Any.toJS(cx: Context, scope: Scriptable) = when (this) {
+    is Media -> this.toJS(cx, scope)
+    is Event -> this.toJS(cx, scope)
+    is User -> this.toJS(cx, scope)
+    is jsbot.jsapi.Message -> this.toJS(cx, scope)
+    else -> Context.javaToJS(this, scope)
 }

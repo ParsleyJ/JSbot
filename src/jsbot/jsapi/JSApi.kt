@@ -7,6 +7,8 @@ import jsbot.toScriptable
 import org.mozilla.javascript.*
 import org.telegram.telegrambots.meta.api.methods.AnswerInlineQuery
 import org.telegram.telegrambots.meta.api.methods.send.*
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText
 import org.telegram.telegrambots.meta.api.objects.Message
 import org.telegram.telegrambots.meta.api.objects.inlinequery.InlineQuery
 import org.telegram.telegrambots.meta.api.objects.inlinequery.result.cached.*
@@ -22,6 +24,7 @@ fun JSBot.addJSBotAPI(
     this.addStuffToStringProto(scope, jobMessage)
     this.addMediaClassToScope(scope)
     this.addEventClassToScope(scope)
+    this.addMessageClassToScope(scope)
     this.addUserClassToScope(scope, jobMessage)
 }
 
@@ -54,13 +57,15 @@ fun JSBot.addStuffToStringProto(
     }
 
 
-    ScriptableObject.defineProperty(stringProto, "findEmojis", JSFunction(0) { cx2, scope2, thisObj, _ ->
+    ScriptableObject.defineProperty(
+        stringProto, "findEmojis", JSFunction(0) { cx2, scope2, thisObj, _ ->
             return@JSFunction when (val argument = Context.jsToJava(thisObj, String::class.java)) {
                 is String -> Emoji.findEmoji(argument).toScriptable(cx2, scope2)
                 else -> null
             }
-    },
-    ScriptableObject.DONTENUM)
+        },
+        ScriptableObject.DONTENUM
+    )
 }
 
 
@@ -208,6 +213,57 @@ fun JSBot.addMediaClassToScope(
     ScriptableObject.defineClass(scope, Media::class.java)
 }
 
+fun JSBot.addMessageClassToScope(scope: Scriptable, jobMessage: Message? = null) {
+
+    ScriptableObject.defineClass(scope, jsbot.jsapi.Message::class.java)
+    val messageProto = ScriptableObject.getClassPrototype(scope, "Message")
+
+
+
+    ScriptableObject.defineProperty(messageProto, "editText", JSFunction(1) { _, _, thisObj, args ->
+
+        /*if(!retrieveRoleFromUser(jobMessage.from).isAuthorized(Role.TAMPER_MESSAGES_ABILITY)){
+            throw JSBot.JSBotException("Not Authorized to tamper messages that have been already sent.")
+        }*/
+        if (args.isEmpty()) {
+            throw JSBot.JSBotException("Missing argument")
+        }
+
+        if (thisObj !is jsbot.jsapi.Message) {
+            throw JSBot.JSBotException("Invalid type of receiver object")
+        }
+
+        this.execute(
+            EditMessageText()
+                .setChatId(thisObj.chatID)
+                .setMessageId(thisObj.messageID)
+                .setText(Context.toString(args[0]))
+        )
+        return@JSFunction ""
+
+    }, ScriptableObject.DONTENUM)
+
+
+
+
+
+
+
+    ScriptableObject.defineProperty(messageProto, "delete", JSFunction.JSMethod<jsbot.jsapi.Message> { _, _, thisObj ->
+        /*if(!retrieveRoleFromUser(jobMessage.from).isAuthorized(Role.TAMPER_MESSAGES_ABILITY)){
+            throw JSBot.JSBotException("Not Authorized to tamper messages that have been already sent.")
+        }*/
+        return@JSMethod execute(
+
+            DeleteMessage()
+                .setChatId(thisObj.chatID)
+                .setMessageId(thisObj.messageID)
+        )
+    }, ScriptableObject.DONTENUM)
+
+
+}
+
 fun Message?.toMedia(): Media? {
     return when {
         this == null -> null
@@ -234,7 +290,7 @@ fun Media?.send(chatID: Long, bot: JSBot, withText: String? = null) {
         bot.execute(send)
         return
     }
-    val fileID = fileID
+
 
     when (mediaType) {
         Media.ANIMATION -> bot.execute(SendAnimation().setAnimation(fileID).setChatId(chatID).disableNotification())
