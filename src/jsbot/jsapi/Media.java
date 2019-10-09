@@ -1,7 +1,7 @@
 package jsbot.jsapi;
 
 import jsbot.JSBot;
-import jsbot.UtilsKt;
+import jsbot.JSBotException;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.Function;
 import org.mozilla.javascript.Scriptable;
@@ -24,6 +24,7 @@ public class Media extends ScriptableObject {
     public final static String PHOTO = "PHOTO";
     public final static String STICKER = "STICKER";
     public final static String VIDEO = "VIDEO";
+    public final static String VIDEO_NOTE = "VIDEO_NOTE";
     public final static String VOICE = "VOICE";
 
 
@@ -40,7 +41,7 @@ public class Media extends ScriptableObject {
     public static Media jsConstructor(Context cx, Object[] args, Function ctorObj, boolean inNewExpr) {
         if (inNewExpr) {
             if (args.length < 2) {
-                throw new JSBot.JSBotException("Missing required argument 2");
+                throw new JSBotException("Missing required argument 2");
             }
             Media result = new Media();
 
@@ -48,14 +49,14 @@ public class Media extends ScriptableObject {
             if (typeArg instanceof String) {
                 result.mediaType = ((String) typeArg);
             } else {
-                throw new JSBot.JSBotException("Invalid mediaType argument type");
+                throw new JSBotException("Invalid mediaType argument type");
             }
 
             Object idArg = args[1];
             if (idArg instanceof String) {
                 result.fileID = ((String) idArg);
             } else {
-                throw new JSBot.JSBotException("Invalid fileID argument type");
+                throw new JSBotException("Invalid fileID argument type");
             }
 
             return result;
@@ -88,15 +89,15 @@ public class Media extends ScriptableObject {
     }
 
     public String getDocumentContents(JSBot bot) {
-        if (mediaType == DOCUMENT) {
-            File tgFile = null;
+        if (mediaType.equals(DOCUMENT)) {
+            File tgFile;
             try {
                 tgFile = bot.execute(new GetFile().setFileId(fileID));
 
 
                 int fileSize = tgFile.getFileSize();
                 if (fileSize > FILE_LIMIT) {
-                    throw new JSBot.JSBotException("File too big: $fileSize");
+                    throw new JSBotException("File too big: $fileSize");
                 }
                 InputStream stream = bot.downloadFileAsStream(tgFile);
 
@@ -114,7 +115,7 @@ public class Media extends ScriptableObject {
                 throw new RuntimeException(e);
             }
         } else {
-            throw new JSBot.JSBotException("Invalid media type");
+            throw new JSBotException("Invalid media type");
         }
     }
 

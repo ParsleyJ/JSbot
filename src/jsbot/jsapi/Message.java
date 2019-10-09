@@ -1,19 +1,27 @@
 package jsbot.jsapi;
 
 import jsbot.JSBot;
+import jsbot.JSBotException;
 import jsbot.UtilsKt;
 import org.mozilla.javascript.*;
+import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 
 /**
  * Created on 07/10/2019.
  */
 public class Message extends ScriptableObject {
 
+    public static final int PLAIN = 0;
+    public static final int MARKDOWN = 1;
+    public static final int HTML = 2;
+
     private Integer messageID = null;
     private Long chatID = null;
     private Media mediaContent = null;
     private String textContent = null;
     private User from = null;
+    private Integer format = PLAIN;
+    private Boolean silent = true;
 
     public static Message jsConstructor(Context cx, Object[] args, Function ctorObj, boolean inNewExpr) {
         Message result = new Message();
@@ -29,10 +37,10 @@ public class Message extends ScriptableObject {
                         try {
                             result.messageID = Integer.parseInt(((String) messageID));
                         } catch (NumberFormatException ignored) {
-                            throw new JSBot.JSBotException("Invalid message ID");
+                            throw new JSBotException("Invalid message ID");
                         }
                     } else {
-                        throw new JSBot.JSBotException("Invalid messageID argument type");
+                        throw new JSBotException("Invalid messageID argument type");
                     }
                 }
                 Object chatID = scriptableArg.get("chatID", scriptableArg);
@@ -43,10 +51,10 @@ public class Message extends ScriptableObject {
                         try {
                             result.chatID = Long.parseLong(((String) chatID));
                         } catch (NumberFormatException ignored) {
-                            throw new JSBot.JSBotException("Invalid chat ID");
+                            throw new JSBotException("Invalid chat ID");
                         }
                     } else {
-                        throw new JSBot.JSBotException("Invalid chatID argument type");
+                        throw new JSBotException("Invalid chatID argument type");
                     }
                 }
                 Object mediaContent = scriptableArg.get("mediaContent", scriptableArg);
@@ -54,7 +62,7 @@ public class Message extends ScriptableObject {
                     if (mediaContent instanceof Scriptable) {
                         result.mediaContent = Media.fromJS((Scriptable) mediaContent);
                     } else {
-                        throw new JSBot.JSBotException("Invalid mediaContent argument type");
+                        throw new JSBotException("Invalid mediaContent argument type");
                     }
                 }
                 Object textContent = scriptableArg.get("textContent", scriptableArg);
@@ -70,11 +78,11 @@ public class Message extends ScriptableObject {
                     if (from instanceof Scriptable) {
                         result.from = User.fromJS((Scriptable) from);
                     } else {
-                        throw new JSBot.JSBotException("Invalid from argument type");
+                        throw new JSBotException("Invalid from argument type");
                     }
                 }
             } else {
-                throw new JSBot.JSBotException("Unexpected message initializer object");
+                throw new JSBotException("Unexpected message initializer object");
             }
         }
         return result;
@@ -95,6 +103,7 @@ public class Message extends ScriptableObject {
         ScriptableObject.putProperty(arg, "mediaContent", mediaContent);
         ScriptableObject.putProperty(arg, "textContent", textContent);
         ScriptableObject.putProperty(arg, "from", from);
+        ScriptableObject.putProperty(arg, "format", format);
         return arg;
     }
 
@@ -118,58 +127,70 @@ public class Message extends ScriptableObject {
         return UtilsKt.toJS(from, Context.getCurrentContext(), this);
     }
 
+    public Integer jsGet_textFormat() {
+        return format;
+    }
 
-    public Scriptable jsFunction_withMessageID(Integer arg) {
+    private Message cloneMess(){
         Message result = new Message();
-        result.messageID = arg;
+        result.messageID = messageID;
         result.chatID = chatID;
         result.mediaContent = mediaContent;
         result.textContent = textContent;
         result.from = from;
+        result.format = format;
+        return result;
+    }
+
+    public Scriptable jsFunction_withMessageID(Integer arg) {
+        Message result = cloneMess();
+        result.messageID = arg;
         return result.toJS(Context.getCurrentContext(), this);
     }
 
 
     public Scriptable jsFunction_withChatID(Integer arg) {
-        Message result = new Message();
-        result.messageID = messageID;
+        Message result = cloneMess();
         result.chatID = arg.longValue();
-        result.mediaContent = mediaContent;
-        result.textContent = textContent;
-        result.from = from;
         return result.toJS(Context.getCurrentContext(), this);
     }
 
 
     public Scriptable jsFunction_withMediaContent(Media arg) {
-        Message result = new Message();
-        result.messageID = messageID;
-        result.chatID = chatID;
+        Message result = cloneMess();
         result.mediaContent = arg;
-        result.textContent = textContent;
-        result.from = from;
         return result.toJS(Context.getCurrentContext(), this);
     }
 
 
     public Scriptable jsFunction_withTextContent(String arg) {
         Message result = new Message();
-        result.messageID = messageID;
-        result.chatID = chatID;
-        result.mediaContent = mediaContent;
         result.textContent = arg;
-        result.from = from;
         return result.toJS(Context.getCurrentContext(), this);
     }
 
 
     public Scriptable jsFunction_withFrom(User arg) {
         Message result = new Message();
-        result.messageID = messageID;
-        result.chatID = chatID;
-        result.mediaContent = mediaContent;
-        result.textContent = textContent;
         result.from = arg;
+        return result.toJS(Context.getCurrentContext(), this);
+    }
+
+    public Scriptable jsFunction_asMarkdown(){
+        Message result = new Message();
+        result.format = MARKDOWN;
+        return result.toJS(Context.getCurrentContext(), this);
+    }
+
+    public Scriptable jsFunction_asPlaintext(){
+        Message result = new Message();
+        result.format = PLAIN;
+        return result.toJS(Context.getCurrentContext(), this);
+    }
+
+    public Scriptable jsFunction_asHtml(){
+        Message result = new Message();
+        result.format = HTML;
         return result.toJS(Context.getCurrentContext(), this);
     }
 
@@ -192,6 +213,18 @@ public class Message extends ScriptableObject {
 
     public User getFrom() {
         return from;
+    }
+
+    public boolean isMarkdown(){
+        return format == MARKDOWN;
+    }
+
+    public boolean isHTML(){
+        return format == HTML;
+    }
+
+    public boolean isSilent(){
+        return silent;
     }
 
     public Message setMessageID(Number messageID) {
@@ -219,6 +252,26 @@ public class Message extends ScriptableObject {
         return this;
     }
 
+    public Message setSilent(boolean silent){
+        this.silent = silent;
+        return this;
+    }
+
+    public Message setPlaintext(){
+        this.format = PLAIN;
+        return this;
+    }
+
+    public Message setMarkdown(){
+        this.format = MARKDOWN;
+        return this;
+    }
+
+    public Message setHTML(){
+        this.format = HTML;
+        return this;
+    }
+
     public static Message fromTgMessage(org.telegram.telegrambots.meta.api.objects.Message message) {
         Message result = new Message();
         result.messageID = message.getMessageId();
@@ -238,8 +291,18 @@ public class Message extends ScriptableObject {
     }
 
 
+    public static Message fromJS(Scriptable obj) {
+        if(obj instanceof Message){
+            return ((Message) obj);
+        }
+        return null;
+    }
+
+
     @Override
     public String getClassName() {
         return "Message";
     }
+
+
 }

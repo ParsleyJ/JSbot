@@ -30,12 +30,11 @@ fun String.toScriptable(cx: Context, scope: Scriptable): Any {
 }
 
 
-
 fun Scriptable.serialize(context: Context? = null): String {
-    if(this is User){
+    if (this is User) {
         return this.jsFunction_toSource()
     }
-    if(this is Event){
+    if (this is Event) {
         return this.jsFunction_toSource()
     }
     val cx = context ?: Context.getCurrentContext()
@@ -116,4 +115,24 @@ fun Any.toJS(cx: Context, scope: Scriptable) = when (this) {
     is User -> this.toJS(cx, scope)
     is jsbot.jsapi.Message -> this.toJS(cx, scope)
     else -> Context.javaToJS(this, scope)
+}
+
+
+
+fun String?.clipForMessage(limit: Int = 4096, replyEmptyString: Boolean = true): String {
+    var textResult = this
+    textResult = if (textResult === null) "" else textResult
+
+    if (replyEmptyString && textResult.isBlank()) {
+        textResult = "< empty string >"
+    }
+
+    if (textResult.length >= limit) {
+        var lenghtMark = "\n...< message length: ${textResult.length} >..."
+        if (lenghtMark.length >= 4096) {
+            lenghtMark = lenghtMark.substring(0, limit - 1)
+        }
+        textResult = textResult.substring(0, limit - 1 - lenghtMark.length - 1) + lenghtMark
+    }
+    return textResult
 }

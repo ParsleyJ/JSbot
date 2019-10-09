@@ -40,6 +40,7 @@ interface Role {
         const val PRIVATE_MESSAGING_ABILITY = "PRIVATE_MESSAGING"
         const val CHANGE_HANDLERS_ABILITY = "CHANGE_HANDLERS"
         const val TAMPER_MESSAGES_ABILITY = "TAMPER_MESSAGES"
+        const val DISGUISE_ABILITY = "DISGUISE"
 
 
         fun create(roletype: String) = when (roletype) {
@@ -107,7 +108,8 @@ interface Role {
             override fun getAbilites() = super.getAbilites() + setOf(
                 JAVA_ABILITY,
                 BOT_ACCESS_ABILITY,
-                LOAD_FILE_ABILITY
+                LOAD_FILE_ABILITY,
+                DISGUISE_ABILITY
             )
 
             override fun getValue() = super.getValue() + 1

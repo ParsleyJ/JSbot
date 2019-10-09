@@ -1,6 +1,6 @@
 package jsbot.jsapi;
 
-import jsbot.JSBot;
+import jsbot.JSBotException;
 import jsbot.UtilsKt;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.Function;
@@ -28,7 +28,7 @@ public class Event extends ScriptableObject {
     public static Event jsConstructor(Context cx, Object[] args, Function ctorObj, boolean inNewExpr) {
         if(inNewExpr){
             if (args.length < 2) {
-                throw new JSBot.JSBotException("Missing required argument 2");
+                throw new JSBotException("Missing required argument 2");
             }
             Event result = new Event();
 
@@ -36,7 +36,7 @@ public class Event extends ScriptableObject {
             if (typeArg instanceof String) {
                 result.type = ((String) typeArg);
             } else {
-                throw new JSBot.JSBotException("Invalid type argument type");
+                throw new JSBotException("Invalid type argument type");
             }
             result.content = args[1];
 

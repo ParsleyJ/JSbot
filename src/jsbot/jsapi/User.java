@@ -1,12 +1,10 @@
 package jsbot.jsapi;
 
-import jsbot.JSBot;
+import jsbot.JSBotException;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.Function;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
-
-import static com.google.inject.util.Types.arrayOf;
 
 /**
  * Java bean with special methods to be used in Rhino engine.
@@ -31,7 +29,7 @@ public class User extends ScriptableObject {
         if (inNewExpr) {
 
             if (args.length == 0) {
-                throw new JSBot.JSBotException("Missing required id argument");
+                throw new JSBotException("Missing required id argument");
             }
             User result = new User();
 
@@ -40,7 +38,7 @@ public class User extends ScriptableObject {
                 Number idNum = ((Number) idArg);
                 result.id = idNum.intValue();
             } else {
-                throw new JSBot.JSBotException("Invalid id argument type");
+                throw new JSBotException("Invalid id argument type");
             }
 
 
@@ -50,7 +48,7 @@ public class User extends ScriptableObject {
                 if (unArg instanceof String) {
                     result.username = ((String) unArg);
                 } else if (unArg != null) {
-                    throw new JSBot.JSBotException("Invalid username argument type");
+                    throw new JSBotException("Invalid username argument type");
                 }
 
             }
